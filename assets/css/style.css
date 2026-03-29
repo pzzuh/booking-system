@@ -1,0 +1,133 @@
+/* NDMU Facility Booking System - custom styles */
+
+:root{
+  --ndmu-gold:#d4af37;
+  --ndmu-green:#0b5d1e;
+  --ndmu-dark:#0b1320;
+}
+
+html,body{height:100%;}
+body{background:#f6f7fb;}
+
+.auth-page{
+  background-size:cover;
+  background-position:center;
+  position:relative;
+}
+.auth-page::before{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.10));
+  pointer-events:none;
+}
+.auth-page > *{position:relative;}
+
+.glass-card{
+  background:rgba(255,255,255,.65);
+  border:1px solid rgba(255,255,255,.35);
+  box-shadow:0 12px 40px rgba(12, 18, 35, .12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 18px;
+}
+
+/* Slight button size lift (clean, not exaggerated) */
+.auth-page .btn{
+  --bs-btn-padding-y: .6rem;
+  --bs-btn-padding-x: 1.05rem;
+  --bs-btn-font-size: 1rem;
+}
+.auth-page .btn.btn-sm{
+  --bs-btn-padding-y: .5rem;
+  --bs-btn-padding-x: .95rem;
+}
+
+.mini-calendar{
+  --fc-border-color: rgba(0,0,0,.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: transparent;
+  font-size: .86rem;
+}
+.mini-calendar .fc .fc-toolbar-title{
+  font-size: 1rem;
+  font-weight: 700;
+}
+.mini-calendar .fc .fc-button{
+  padding: .18rem .45rem;
+  font-size: .85rem;
+}
+.mini-calendar .fc .fc-daygrid-day-number{
+  padding: .2rem .3rem;
+}
+.mini-calendar .fc .fc-daygrid-event{
+  border-radius: 999px;
+  padding: 0 .35rem;
+}
+
+.ndmu-hero{
+  min-height:100vh;
+  background-size:cover;
+  background-position:center;
+  position:relative;
+  color:#fff;
+}
+.ndmu-hero::before{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,.45));
+}
+.ndmu-hero > *{position:relative;}
+
+.ndmu-split-left{
+  min-height:100vh;
+  background-size:cover;
+  background-position:center;
+  position:relative;
+  color:#fff;
+}
+.ndmu-split-left::before{
+  content:"";
+  position:absolute; inset:0;
+  background:rgba(0,0,0,.55);
+}
+.ndmu-split-left > *{position:relative;}
+
+.brand-gold{color:var(--ndmu-gold)!important;}
+.bg-ndmu-dark{background:var(--ndmu-dark)!important;}
+
+.unread-highlight{background:#e9f3ff;}
+.pointer{cursor:pointer;}
+
+.banner{
+  background-size:cover;
+  background-position:center;
+  position:relative;
+  border-radius:.75rem;
+  overflow:hidden;
+}
+.banner::before{
+  content:"";
+  position:absolute; inset:0;
+  background:rgba(0,0,0,.55);
+}
+.banner .banner-content{position:relative;}
+
+.watermark-approved{
+  position:fixed;
+  top:45%;
+  left:50%;
+  transform:translate(-50%,-50%) rotate(-20deg);
+  font-size:92px;
+  font-weight:800;
+  color:rgba(25,135,84,.16);
+  pointer-events:none;
+  z-index:0;
+  letter-spacing:6px;
+}
+
+@media print{
+  .no-print{display:none!important;}
+  body{background:#fff;}
+  .watermark-approved{color:rgba(25,135,84,.22);}
+  @page{margin:14mm;}
+}
