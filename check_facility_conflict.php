@@ -20,10 +20,10 @@ if (!$ok) {
 }
 
 $facilityId = (int)($_POST['facility_id'] ?? 0);
-$dateStart = sanitizeInput($_POST['date_start'] ?? '');
-$dateEnd = sanitizeInput($_POST['date_end'] ?? '');
-$timeStart = sanitizeInput($_POST['time_start'] ?? '');
-$timeEnd = sanitizeInput($_POST['time_end'] ?? '');
+$dateStart  = sanitizeInput($_POST['date_start'] ?? '');
+$dateEnd    = sanitizeInput($_POST['date_end']   ?? '');
+$timeStart  = sanitizeInput($_POST['time_start'] ?? '');
+$timeEnd    = sanitizeInput($_POST['time_end']   ?? '');
 
 if ($facilityId <= 0 || $dateStart === '' || $dateEnd === '' || $timeStart === '' || $timeEnd === '') {
     echo json_encode(['conflict' => false, 'message' => '']);
@@ -31,7 +31,7 @@ if ($facilityId <= 0 || $dateStart === '' || $dateEnd === '' || $timeStart === '
 }
 
 $newStart = "{$dateStart} {$timeStart}:00";
-$newEnd = "{$dateEnd} {$timeEnd}:00";
+$newEnd   = "{$dateEnd} {$timeEnd}:00";
 
 try {
     $stmt = $pdo->prepare(
@@ -40,14 +40,17 @@ try {
          WHERE facility_id = ?
            AND status NOT IN ('rejected','cancelled')
            AND (CONCAT(date_start,' ',time_start) < ?)
-           AND (CONCAT(date_end,' ',time_end) > ?)
+           AND (CONCAT(date_end,' ',time_end)   > ?)
          ORDER BY date_start ASC, time_start ASC
          LIMIT 1"
     );
     $stmt->execute([$facilityId, $newEnd, $newStart]);
     $row = $stmt->fetch();
+
     if ($row) {
-        $msg = "Conflict with booking: " . (string)$row['title'] . " (" . (string)$row['date_start'] . " " . (string)$row['time_start'] . " - " . (string)$row['date_end'] . " " . (string)$row['time_end'] . ")";
+        $msg = "Conflict with booking: " . (string)$row['title']
+             . " (" . (string)$row['date_start'] . " " . (string)$row['time_start']
+             . " - " . (string)$row['date_end']   . " " . (string)$row['time_end'] . ")";
         echo json_encode(['conflict' => true, 'message' => $msg]);
         exit;
     }

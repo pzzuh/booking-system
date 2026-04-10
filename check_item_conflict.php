@@ -19,8 +19,8 @@ if (!$ok) {
     exit;
 }
 
-$itemId = (int)($_POST['item_id'] ?? 0);
-$qty = (int)($_POST['quantity_needed'] ?? 0);
+$itemId     = (int)($_POST['item_id']        ?? 0);
+$qty        = (int)($_POST['quantity_needed'] ?? 0);
 $borrowDate = sanitizeInput($_POST['borrow_date'] ?? '');
 $returnDate = sanitizeInput($_POST['return_date'] ?? '');
 $borrowTime = sanitizeInput($_POST['borrow_time'] ?? '');
@@ -32,16 +32,18 @@ if ($itemId <= 0 || $qty <= 0 || $borrowDate === '' || $returnDate === '' || $bo
 }
 
 $start = "{$borrowDate} {$borrowTime}:00";
-$end = "{$returnDate} {$returnTime}:00";
+$end   = "{$returnDate} {$returnTime}:00";
 
 try {
     $stmt = $pdo->prepare('SELECT quantity_available, name FROM items WHERE id = ?');
     $stmt->execute([$itemId]);
     $item = $stmt->fetch();
+
     if (!$item) {
         echo json_encode(['available' => false, 'message' => 'Item not found.']);
         exit;
     }
+
     $availableNow = (int)$item['quantity_available'];
 
     $stmt = $pdo->prepare(
@@ -54,16 +56,21 @@ try {
     );
     $stmt->execute([$itemId, $end, $start]);
     $reserved = (int)$stmt->fetchColumn();
+
     $effective = $availableNow - $reserved;
 
     if ($effective >= $qty) {
         echo json_encode(['available' => true, 'message' => 'Available.']);
         exit;
     }
-    echo json_encode(['available' => false, 'message' => 'Not enough quantity available for the selected dates. Available: ' . max(0, $effective)]);
+
+    echo json_encode([
+        'available' => false,
+        'message'   => 'Not enough quantity available for the selected dates. Available: ' . max(0, $effective)
+    ]);
     exit;
+
 } catch (Throwable) {
     echo json_encode(['available' => true, 'message' => 'Available.']);
     exit;
 }
-

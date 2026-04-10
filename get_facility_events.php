@@ -7,24 +7,40 @@ require_once __DIR__ . '/includes/functions.php';
 requireLogin();
 header('Content-Type: application/json; charset=utf-8');
 
+$user       = getCurrentUser();
 $facilityId = (int)($_GET['facility_id'] ?? 0);
+$onlyMine   = isset($_GET['mine']) && $_GET['mine'] === '1';
 
-$where = '';
-$params = [];
+$conditions = [];
+$params     = [];
+
+// Optionally filter by facility
 if ($facilityId > 0) {
-    $where = 'WHERE fb.facility_id = ?';
-    $params[] = $facilityId;
+    $conditions[] = 'fb.facility_id = ?';
+    $params[]     = $facilityId;
 }
+
+// FIX 1: Never show cancelled or rejected on the calendar
+$conditions[] = "fb.status NOT IN ('cancelled', 'rejected')";
+
+// FIX 2: On the student dashboard mini-calendar, only show that student's own bookings
+if ($onlyMine) {
+    $conditions[] = 'fb.user_id = ?';
+    $params[]     = (int)$user['id'];
+}
+
+$where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
 try {
     $stmt = $pdo->prepare(
-        "SELECT fb.id, fb.title, fb.purpose, fb.notes, fb.date_start, fb.date_end, fb.time_start, fb.time_end,
+        "SELECT fb.id, fb.title, fb.purpose, fb.notes,
+                fb.date_start, fb.date_end, fb.time_start, fb.time_end,
                 fb.status, fb.current_approval_role,
-                f.name AS facility_name,
+                f.name    AS facility_name,
                 u.full_name AS student_name
          FROM facility_bookings fb
          JOIN facilities f ON f.id = fb.facility_id
-         JOIN users u ON u.id = fb.user_id
+         JOIN users      u ON u.id = fb.user_id
          {$where}
          ORDER BY fb.date_start ASC, fb.time_start ASC"
     );
@@ -35,36 +51,41 @@ try {
 }
 
 $events = [];
+
 foreach ($rows as $r) {
     $status = (string)$r['status'];
+
+    // FIX 1: colour map — cancelled is excluded above, but guard anyway
     $color = match ($status) {
-        'fully_approved' => '#198754',
-        'rejected' => '#dc3545',
-        default => '#fd7e14', // pending/orange
+        'fully_approved' => '#198754', // green
+        'pending'        => '#fd7e14', // orange
+        'approved'       => '#0d6efd', // blue (partial approval step)
+        default          => '#6c757d', // grey fallback
     };
+
     $start = (string)$r['date_start'] . 'T' . (string)$r['time_start'];
-    $end = (string)$r['date_end'] . 'T' . (string)$r['time_end'];
+    $end   = (string)$r['date_end']   . 'T' . (string)$r['time_end'];
+
     $events[] = [
-        'id' => (int)$r['id'],
-        'title' => (string)$r['title'],
-        'start' => $start,
-        'end' => $end,
+        'id'              => (int)$r['id'],
+        'title'           => (string)$r['title'],
+        'start'           => $start,
+        'end'             => $end,
         'backgroundColor' => $color,
-        'borderColor' => $color,
-        'extendedProps' => [
-            'facility_name' => (string)$r['facility_name'],
-            'student_name' => (string)$r['student_name'],
-            'purpose' => (string)$r['purpose'],
-            'notes' => (string)$r['notes'],
-            'date_start' => (string)$r['date_start'],
-            'date_end' => (string)$r['date_end'],
-            'time_start' => (string)$r['time_start'],
-            'time_end' => (string)$r['time_end'],
-            'status_badge' => statusBadge($status),
-            'current_role_badge' => approvalRoleBadge((string)$r['current_approval_role']),
+        'borderColor'     => $color,
+        'extendedProps'   => [
+            'facility_name'      => (string)$r['facility_name'],
+            'student_name'       => (string)$r['student_name'],
+            'purpose'            => (string)$r['purpose'],
+            'notes'              => (string)($r['notes'] ?? ''),
+            'date_start'         => (string)$r['date_start'],
+            'date_end'           => (string)$r['date_end'],
+            'time_start'         => (string)$r['time_start'],
+            'time_end'           => (string)$r['time_end'],
+            'status_badge'       => statusBadge($status),
+            'current_role_badge' => approvalRoleBadge((string)($r['current_approval_role'] ?? '')),
         ],
     ];
 }
 
 echo json_encode($events);
-

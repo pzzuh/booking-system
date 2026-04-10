@@ -11,13 +11,14 @@ $flash = getFlash();
 $stmt = $pdo->prepare('SELECT id, full_name, email, phone, department, student_id, role, profile_photo, password_hash FROM users WHERE id = ?');
 $stmt->execute([(int)$user['id']]);
 $dbUser = $stmt->fetch();
+
 if (!$dbUser) {
     session_unset();
     session_destroy();
     redirectWithMessage('login.php', 'danger', 'Account not found.');
 }
 
-// NDMU Colleges and Departments (same list as register.php)
+// NDMU Colleges and Departments
 $ndmuDepartments = [
     'College of Arts and Sciences' => [
         'Bachelor of Arts in Communication',
@@ -104,13 +105,15 @@ $success = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
 
+    // ── UPDATE PROFILE ──────────────────────────────────────────────────────
     if (!empty($_POST['action']) && $_POST['action'] === 'update_profile') {
-        $name       = sanitizeInput($_POST['full_name'] ?? '');
-        $phone      = sanitizeInput($_POST['phone'] ?? '');
-        $department = sanitizeInput($_POST['department'] ?? '');
-        $studentId  = sanitizeInput($_POST['student_id'] ?? '');
 
-        // Validate department against allowed list
+        $name       = sanitizeInput($_POST['full_name']   ?? '');
+        $phone      = sanitizeInput($_POST['phone']       ?? '');
+        $department = sanitizeInput($_POST['department']  ?? '');
+        $studentId  = sanitizeInput($_POST['student_id']  ?? '');
+
+        // Build flat department list for validation
         $allDepts = [];
         foreach ($ndmuDepartments as $college => $depts) {
             foreach ($depts as $d) {
@@ -124,12 +127,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Please select a valid department.';
         } else {
             $photoPath = (string)($dbUser['profile_photo'] ?? '');
+
             if (!empty($_FILES['profile_photo']['name'])) {
                 $file = $_FILES['profile_photo'];
+
                 if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     $error = 'Photo upload failed.';
                 } else {
                     $size = (int)($file['size'] ?? 0);
+
                     if ($size > (2 * 1024 * 1024)) {
                         $error = 'Profile photo must be under 2MB.';
                     } else {
@@ -137,20 +143,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $finfo = finfo_open(FILEINFO_MIME_TYPE);
                         $mime  = $finfo ? finfo_file($finfo, $tmp) : '';
                         if ($finfo) finfo_close($finfo);
+
                         $ext = match ($mime) {
                             'image/jpeg' => 'jpg',
                             'image/png'  => 'png',
                             default      => null
                         };
+
                         if (!$ext) {
                             $error = 'Only JPG/PNG images are allowed.';
                         } else {
+                            $uploadDir = __DIR__ . '/uploads/profile_photos/';
+
+                            // ── FIX: auto-create the directory if it doesn't exist ──
+                            if (!is_dir($uploadDir)) {
+                                mkdir($uploadDir, 0755, true);
+                            }
+
                             $baseName = 'u' . (int)$dbUser['id'] . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
                             $destRel  = 'uploads/profile_photos/' . $baseName;
-                            $destAbs  = __DIR__ . '/' . $destRel;
+                            $destAbs  = $uploadDir . $baseName;
+
                             if (!move_uploaded_file($tmp, $destAbs)) {
                                 $error = 'Unable to save uploaded photo.';
                             } else {
+                                // Delete old photo if it exists and is not the default
+                                $oldPhoto = (string)($dbUser['profile_photo'] ?? '');
+                                if ($oldPhoto !== '' && $oldPhoto !== 'assets/images/ndmulogo.png') {
+                                    $oldAbs = __DIR__ . '/' . $oldPhoto;
+                                    if (is_file($oldAbs)) {
+                                        @unlink($oldAbs);
+                                    }
+                                }
                                 $photoPath = $destRel;
                             }
                         }
@@ -167,9 +191,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // ── CHANGE PASSWORD ─────────────────────────────────────────────────────
     if (!empty($_POST['action']) && $_POST['action'] === 'change_password') {
-        $current = (string)($_POST['current_password'] ?? '');
-        $new     = (string)($_POST['new_password'] ?? '');
+        $current = (string)($_POST['current_password']     ?? '');
+        $new     = (string)($_POST['new_password']         ?? '');
         $confirm = (string)($_POST['confirm_new_password'] ?? '');
 
         if ($current === '' || $new === '' || $confirm === '') {
@@ -188,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Refresh from DB
+    // Refresh from DB after any update
     $stmt = $pdo->prepare('SELECT id, full_name, email, phone, department, student_id, role, profile_photo, password_hash FROM users WHERE id = ?');
     $stmt->execute([(int)$user['id']]);
     $dbUser = $stmt->fetch();
@@ -197,20 +222,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $photo    = (string)($dbUser['profile_photo'] ?? '');
 $photoSrc = $photo !== '' ? $photo : 'assets/images/ndmulogo.png';
 
-// Role label helper
 $roleLabels = [
-    'student'       => 'Student',
-    'adviser'       => 'Adviser',
-    'staff'         => 'Staff',
-    'dsa_director'  => 'DSA Director',
-    'ppss_director' => 'PPSS Director',
-    'dean'          => 'Dean',
-    'avp_admin'     => 'AVP Admin',
-    'vp_admin'      => 'VP Admin',
-    'president'     => 'President',
-    'admin'         => 'Admin',
-    'janitor'       => 'Janitor',
-    'security'      => 'Security',
+    'student'        => 'Student',
+    'adviser'        => 'Adviser',
+    'staff'          => 'Staff',
+    'dsa_director'   => 'DSA Director',
+    'ppss_director'  => 'PPSS Director',
+    'dean'           => 'Dean',
+    'avp_admin'      => 'AVP Admin',
+    'vp_admin'       => 'VP Admin',
+    'president'      => 'President',
+    'admin'          => 'Admin',
+    'janitor'        => 'Janitor',
+    'security'       => 'Security',
 ];
 $roleLabel = $roleLabels[(string)$dbUser['role']] ?? ucfirst((string)$dbUser['role']);
 ?>
@@ -218,113 +242,128 @@ $roleLabel = $roleLabels[(string)$dbUser['role']] ?? ucfirst((string)$dbUser['ro
 <?php require_once __DIR__ . '/includes/navbar.php'; ?>
 
 <div class="container py-4">
-  <?php if ($flash): ?>
-    <div class="alert alert-<?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
-  <?php endif; ?>
-  <?php if ($error): ?>
-    <div class="alert alert-danger"><?= e($error) ?></div>
-  <?php endif; ?>
-  <?php if ($success): ?>
-    <div class="alert alert-success"><?= e($success) ?></div>
-  <?php endif; ?>
 
-  <div class="row g-4">
-    <div class="col-lg-4">
-      <div class="card shadow-sm">
-        <div class="card-body text-center">
-          <img src="<?= e($photoSrc) ?>" alt="Profile" width="140" height="140" class="rounded-circle border" style="object-fit:cover">
-          <div class="mt-3 fw-bold fs-5"><?= e((string)$dbUser['full_name']) ?></div>
-          <div class="text-muted"><?= e((string)$dbUser['email']) ?></div>
-          <div class="mt-2">
-            <span class="badge bg-primary"><?= e($roleLabel) ?></span>
-          </div>
-          <?php if ((string)$dbUser['role'] === 'student'): ?>
-            <div class="text-muted small mt-2">Contact an administrator to update your role.</div>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
+    <?php if ($flash): ?>
+        <div class="alert alert-<?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
+    <?php endif; ?>
+    <?php if ($error): ?>
+        <div class="alert alert-danger"><?= e($error) ?></div>
+    <?php endif; ?>
+    <?php if ($success): ?>
+        <div class="alert alert-success"><?= e($success) ?></div>
+    <?php endif; ?>
 
-    <div class="col-lg-8">
-      <div class="card shadow-sm mb-4">
-        <div class="card-body">
-          <h2 class="h5 fw-semibold mb-3">Edit Profile</h2>
-          <form method="post" enctype="multipart/form-data">
-            <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
-            <input type="hidden" name="action" value="update_profile">
-            <div class="row g-3">
-              <div class="col-md-6">
-                <label class="form-label">Name</label>
-                <input class="form-control" name="full_name" required value="<?= e((string)$dbUser['full_name']) ?>">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Phone</label>
-                <input class="form-control" name="phone" required value="<?= e((string)($dbUser['phone'] ?? '')) ?>">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Student / Employee ID</label>
-                <input class="form-control" name="student_id" required value="<?= e((string)($dbUser['student_id'] ?? '')) ?>">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">College / Department</label>
-                <select class="form-select" name="department" required>
-                  <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select —</option>
-                  <?php foreach ($ndmuDepartments as $college => $depts): ?>
-                    <optgroup label="<?= e($college) ?>">
-                      <?php foreach ($depts as $dept): ?>
-                        <option value="<?= e($dept) ?>" <?= ((string)($dbUser['department'] ?? '') === $dept) ? 'selected' : '' ?>>
-                          <?= e($dept) ?>
-                        </option>
-                      <?php endforeach; ?>
-                    </optgroup>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="col-12">
-                <label class="form-label">Profile Photo <span class="text-muted">(JPG/PNG, &lt; 2MB)</span></label>
-                <input class="form-control" type="file" name="profile_photo" accept="image/jpeg,image/png">
-              </div>
+    <div class="row g-4">
+
+        <!-- ── PROFILE CARD ─────────────────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <img src="<?= e($photoSrc) ?>" alt="Profile" width="140" height="140"
+                         class="rounded-circle border" style="object-fit:cover">
+                    <div class="mt-3 fw-bold fs-5"><?= e((string)$dbUser['full_name']) ?></div>
+                    <div class="text-muted"><?= e((string)$dbUser['email']) ?></div>
+                    <div class="mt-2">
+                        <span class="badge bg-primary"><?= e($roleLabel) ?></span>
+                    </div>
+                    <?php if ((string)$dbUser['role'] === 'student'): ?>
+                        <div class="text-muted small mt-2">Contact an administrator to update your role.</div>
+                    <?php endif; ?>
+                </div>
             </div>
-            <button class="btn btn-warning mt-3 fw-semibold">Save Changes</button>
-          </form>
         </div>
-      </div>
 
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 fw-semibold mb-3">Change Password</h2>
-          <form method="post">
-            <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
-            <input type="hidden" name="action" value="change_password">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label">Current Password</label>
-                <div class="input-group">
-                  <input id="curPwd" class="form-control" type="password" name="current_password" required>
-                  <button class="btn btn-outline-secondary" type="button" data-toggle-password="#curPwd"><i class="fa-solid fa-eye"></i></button>
+        <div class="col-lg-8">
+
+            <!-- ── EDIT PROFILE ──────────────────────────────────────────── -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h2 class="h5 fw-semibold mb-3">Edit Profile</h2>
+                    <form method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                        <input type="hidden" name="action"     value="update_profile">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Name</label>
+                                <input class="form-control" name="full_name" required value="<?= e((string)$dbUser['full_name']) ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone</label>
+                                <input class="form-control" name="phone" required value="<?= e((string)($dbUser['phone'] ?? '')) ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Student / Employee ID</label>
+                                <input class="form-control" name="student_id" required value="<?= e((string)($dbUser['student_id'] ?? '')) ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">College / Department</label>
+                                <select class="form-select" name="department" required>
+                                    <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select —</option>
+                                    <?php foreach ($ndmuDepartments as $college => $depts): ?>
+                                        <optgroup label="<?= e($college) ?>">
+                                            <?php foreach ($depts as $dept): ?>
+                                                <option value="<?= e($dept) ?>"
+                                                    <?= ((string)($dbUser['department'] ?? '') === $dept) ? 'selected' : '' ?>>
+                                                    <?= e($dept) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </optgroup>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Profile Photo <span class="text-muted">(JPG/PNG, &lt; 2MB)</span></label>
+                                <input class="form-control" type="file" name="profile_photo" accept="image/jpeg,image/png">
+                            </div>
+                        </div>
+                        <button class="btn btn-warning mt-3 fw-semibold">Save Changes</button>
+                    </form>
                 </div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">New Password</label>
-                <div class="input-group">
-                  <input id="newPwd" class="form-control" type="password" name="new_password" required>
-                  <button class="btn btn-outline-secondary" type="button" data-toggle-password="#newPwd"><i class="fa-solid fa-eye"></i></button>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Confirm New Password</label>
-                <div class="input-group">
-                  <input id="newPwdC" class="form-control" type="password" name="confirm_new_password" required>
-                  <button class="btn btn-outline-secondary" type="button" data-toggle-password="#newPwdC"><i class="fa-solid fa-eye"></i></button>
-                </div>
-              </div>
             </div>
-            <button class="btn btn-outline-primary mt-3 fw-semibold">Update Password</button>
-          </form>
+
+            <!-- ── CHANGE PASSWORD ───────────────────────────────────────── -->
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 fw-semibold mb-3">Change Password</h2>
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                        <input type="hidden" name="action"     value="change_password">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Current Password</label>
+                                <div class="input-group">
+                                    <input id="curPwd" class="form-control" type="password" name="current_password" required>
+                                    <button class="btn btn-outline-secondary" type="button" data-toggle-password="#curPwd">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">New Password</label>
+                                <div class="input-group">
+                                    <input id="newPwd" class="form-control" type="password" name="new_password" required>
+                                    <button class="btn btn-outline-secondary" type="button" data-toggle-password="#newPwd">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Confirm New Password</label>
+                                <div class="input-group">
+                                    <input id="newPwdC" class="form-control" type="password" name="confirm_new_password" required>
+                                    <button class="btn btn-outline-secondary" type="button" data-toggle-password="#newPwdC">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-primary mt-3 fw-semibold">Update Password</button>
+                    </form>
+                </div>
+            </div>
+
         </div>
-      </div>
     </div>
-  </div>
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
