@@ -1,10 +1,7 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_id'])) {
-    header("Location: login.php");
-    exit();
-}
-require_once 'db.php'; // adjust to your db connection file
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/db.php';
+requireRole('admin');
 ?>
 <!DOCTYPE html>
 <html lang="en">
