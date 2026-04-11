@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         default => null
                     };
                     if ($ext) {
+                        $uploadDir = __DIR__ . '/uploads/facility_photos/';
+                        if (!is_dir($uploadDir)) {
+                            mkdir($uploadDir, 0755, true);
+                        }
                         $base = 'fac_' . bin2hex(random_bytes(8)) . '.' . $ext;
                         $rel = 'uploads/facility_photos/' . $base;
                         $abs = __DIR__ . '/' . $rel;
@@ -53,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = sanitizeInput($_POST['name'] ?? '');
             $location = sanitizeInput($_POST['location'] ?? '');
             $capacity = (int)($_POST['capacity'] ?? 0);
+            $isActive = !empty($_POST['is_active']) ? 1 : 0;
             if ($name === '' || $location === '' || $capacity <= 0) {
                 redirectWithMessage('admin_facilities.php', 'danger', 'Invalid facility details.');
             }
@@ -71,6 +76,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         default => null
                     };
                     if ($ext) {
+                        $uploadDir = __DIR__ . '/uploads/facility_photos/';
+                        if (!is_dir($uploadDir)) {
+                            mkdir($uploadDir, 0755, true);
+                        }
                         $base = 'fac_' . bin2hex(random_bytes(8)) . '.' . $ext;
                         $rel = 'uploads/facility_photos/' . $base;
                         $abs = __DIR__ . '/' . $rel;
@@ -80,11 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($photoPath) {
-                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=?, photo_path=? WHERE id=?');
-                $stmt->execute([$name, $location, $capacity, $photoPath, $id]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=?, photo_path=?, is_active=? WHERE id=?');
+                $stmt->execute([$name, $location, $capacity, $photoPath, $isActive, $id]);
             } else {
-                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=? WHERE id=?');
-                $stmt->execute([$name, $location, $capacity, $id]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=?, is_active=? WHERE id=?');
+                $stmt->execute([$name, $location, $capacity, $isActive, $id]);
             }
             redirectWithMessage('admin_facilities.php', 'success', 'Facility updated.');
         }
@@ -115,6 +124,46 @@ try {
 } catch (Throwable) {}
 ?>
 <?php require_once __DIR__ . '/includes/header.php'; ?>
+<style>
+.file-upload-label {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+  height: 38px;
+}
+.file-upload-btn {
+  flex-shrink: 0;
+  background: #e9ecef;
+  border-right: 1px solid #dee2e6;
+  padding: 0 12px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #495057;
+  white-space: nowrap;
+}
+.file-upload-label:hover .file-upload-btn {
+  background: #d3d8dd;
+}
+.file-upload-name {
+  padding: 0 10px;
+  font-size: 0.82rem;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.file-upload-input {
+  display: none;
+}
+</style>
 <?php require_once __DIR__ . '/includes/navbar.php'; ?>
 <?php require_once __DIR__ . '/includes/admin_sidebar.php'; ?>
 
@@ -133,17 +182,19 @@ try {
       <div class="col-md-3"><input class="form-control" name="name" placeholder="Name" required></div>
       <div class="col-md-3"><input class="form-control" name="location" placeholder="Location" required></div>
       <div class="col-md-2"><input class="form-control" type="number" min="1" name="capacity" placeholder="Capacity" required></div>
-      <div class="col-md-2">
-        <label class="form-label small mb-1 fw-semibold">Photo (JPG/PNG)</label>
-        <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
-      </div>
-      <div class="col-md-1 d-flex align-items-center">
-        <div class="form-check">
+      <div class="col d-flex align-items-center gap-2">
+        <label class="file-upload-label flex-grow-1 mb-0" for="facPhotoCreate">
+          <span class="file-upload-btn">📁 Choose File</span>
+          <span class="file-upload-name" id="facPhotoCreateName">No file chosen</span>
+        </label>
+        <input class="file-upload-input" type="file" id="facPhotoCreate" name="photo" accept="image/jpeg,image/png"
+          onchange="document.getElementById('facPhotoCreateName').textContent = this.files[0]?.name || 'No file chosen'">
+        <div class="form-check mb-0 text-nowrap">
           <input class="form-check-input" type="checkbox" name="is_active" id="facActive" checked>
           <label class="form-check-label" for="facActive">Active</label>
         </div>
       </div>
-      <div class="col-md-1"><button class="btn btn-warning w-100 fw-semibold">Add</button></div>
+      <div class="col-auto"><button class="btn btn-warning fw-semibold px-4">Add</button></div>
     </form>
   </div>
 </div>
@@ -218,7 +269,25 @@ try {
                           </div>
                           <div class="mb-3">
                             <label class="form-label">Photo (JPG/PNG, optional)</label>
-                            <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
+                            <?php if (!empty($r['photo_path'])): ?>
+                              <div class="mb-2">
+                                <img src="<?= e((string)$r['photo_path']) ?>" width="80" height="55" style="object-fit:cover" class="rounded border" alt="current photo">
+                                <small class="text-muted ms-2">Current photo</small>
+                              </div>
+                            <?php endif; ?>
+                            <label class="file-upload-label w-100" for="facPhoto<?= (int)$r['id'] ?>">
+                              <span class="file-upload-btn">📁 Choose File</span>
+                              <span class="file-upload-name" id="facPhotoName<?= (int)$r['id'] ?>">No file chosen</span>
+                            </label>
+                            <input class="file-upload-input" type="file" id="facPhoto<?= (int)$r['id'] ?>" name="photo" accept="image/jpeg,image/png"
+                              onchange="document.getElementById('facPhotoName<?= (int)$r['id'] ?>').textContent = this.files[0]?.name || 'No file chosen'">
+                          </div>
+                          <div class="mb-3">
+                            <div class="form-check">
+                              <input class="form-check-input" type="checkbox" name="is_active" id="updActive<?= (int)$r['id'] ?>"
+                                <?= (int)$r['is_active'] === 1 ? 'checked' : '' ?>>
+                              <label class="form-check-label" for="updActive<?= (int)$r['id'] ?>">Active</label>
+                            </div>
                           </div>
                         </div>
                         <div class="modal-footer">
