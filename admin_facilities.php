@@ -1,291 +1,161 @@
 <?php
+declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
-requireRole('admin');
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Facilities</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
-        .sidebar {
-            width: 250px; height: 100vh; background: #1a1a2e;
-            position: fixed; left: 0; top: 0;
-            display: flex; flex-direction: column; padding: 20px 0;
-        }
-        .sidebar .logo { padding: 20px; text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
-        .sidebar .logo h3 { color: #fff; font-size: 14px; }
-        .sidebar .logo p { color: #aaa; font-size: 12px; }
-        .sidebar nav a {
-            display: flex; align-items: center; gap: 12px;
-            padding: 12px 20px; color: #ccc;
-            text-decoration: none; font-size: 14px; transition: all 0.3s;
-        }
-        .sidebar nav a:hover, .sidebar nav a.active {
-            background: rgba(255,255,255,0.1); color: #fff; border-left: 3px solid #4CAF50;
-        }
-        .sidebar nav a i { width: 20px; text-align: center; }
-        .logout-btn { padding: 15px 20px; border-top: 1px solid rgba(255,255,255,0.1); }
-        .logout-btn a {
-            display: flex; align-items: center; gap: 12px;
-            color: #ff6b6b; text-decoration: none; font-size: 14px;
-            padding: 10px; border-radius: 8px; transition: all 0.3s;
-        }
-        .logout-btn a:hover { background: rgba(255,107,107,0.15); }
-        .main-content { margin-left: 250px; padding: 30px; min-height: 100vh; }
-        .header { background: #fff; padding: 20px 30px; border-radius: 12px;
-            margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 24px; color: #1a1a2e; }
-        .card { background: #fff; border-radius: 12px; padding: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 25px; }
-        .btn { padding: 10px 18px; border: none; border-radius: 8px;
-            cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
-        .btn-primary { background: #4361ee; color: #fff; }
-        .btn-primary:hover { background: #3451d1; }
-        .btn-warning { background: #ff9f1c; color: #fff; }
-        .btn-warning:hover { background: #e68a00; }
-        .btn-danger { background: #e63946; color: #fff; }
-        .btn-danger:hover { background: #c62828; }
-        .btn-sm { padding: 6px 12px; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f2f5; font-size: 14px; }
-        th { background: #f8f9fa; color: #555; font-weight: 600; font-size: 13px; }
-        tr:hover { background: #fafbfc; }
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-        .badge-available { background: #e8f5e9; color: #2e7d32; }
-        .badge-unavailable { background: #ffebee; color: #c62828; }
-        .modal-overlay { display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-        .modal-overlay.show { display: flex; }
-        .modal { background: #fff; border-radius: 12px; padding: 30px;
-            width: 500px; max-width: 95%; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
-        .modal h2 { margin-bottom: 20px; font-size: 20px; color: #1a1a2e; }
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; font-size: 13px;
-            color: #555; font-weight: 600; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 10px 14px; border: 1px solid #ddd;
-            border-radius: 8px; font-size: 14px; outline: none; transition: border 0.3s;
-        }
-        .form-group textarea { resize: vertical; min-height: 80px; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #4361ee; }
-        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
-        .alert-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-        .alert-danger { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
-    </style>
-</head>
-<body>
-<div class="sidebar">
-    <div class="logo">
-        <h3>Booking System</h3>
-        <p>Admin Panel</p>
-    </div>
-    <nav>
-        <a href="admin_panel.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-        <a href="admin_users.php"><i class="fas fa-users"></i> Users</a>
-        <a href="admin_bookings.php"><i class="fas fa-calendar-check"></i> Bookings</a>
-        <a href="admin_facilities.php" class="active"><i class="fas fa-building"></i> Facilities</a>
-        <a href="admin_items.php"><i class="fas fa-box"></i> Items</a>
-    </nav>
-    <div class="logout-btn">
-        <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
-    </div>
-</div>
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/functions.php';
 
-<div class="main-content">
-    <div class="header">
-        <h1><i class="fas fa-building"></i> Facilities Management</h1>
-        <button class="btn btn-primary" onclick="openAddModal()">
-            <i class="fas fa-plus"></i> Add Facility
-        </button>
-    </div>
+enforceCorrectDashboard('admin');
+$flash = getFlash();
 
-    <div class="card">
-        <div id="alertBox"></div>
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Facility Name</th>
-                    <th>Location</th>
-                    <th>Capacity</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="facilitiesBody">
-                <tr><td colspan="6" style="text-align:center;padding:30px;color:#888;">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireValidCsrfOrDie();
+    $action = sanitizeInput($_POST['action'] ?? '');
 
-<!-- Add/Edit Facility Modal -->
-<div class="modal-overlay" id="facilityModal">
-    <div class="modal">
-        <h2 id="modalTitle">Add Facility</h2>
-        <input type="hidden" id="facilityId">
-        <div class="form-group">
-            <label>Facility Name</label>
-            <input type="text" id="facilityName" placeholder="Enter facility name">
-        </div>
-        <div class="form-group">
-            <label>Location / Building</label>
-            <input type="text" id="facilityLocation" placeholder="Enter location">
-        </div>
-        <div class="form-group">
-            <label>Capacity</label>
-            <input type="number" id="facilityCapacity" placeholder="Max persons" min="1">
-        </div>
-        <div class="form-group">
-            <label>Description</label>
-            <textarea id="facilityDescription" placeholder="Optional description"></textarea>
-        </div>
-        <div class="form-group">
-            <label>Status</label>
-            <select id="facilityStatus">
-                <option value="available">Available</option>
-                <option value="unavailable">Unavailable</option>
-            </select>
-        </div>
-        <div class="modal-actions">
-            <button class="btn" onclick="closeModal()" style="background:#f0f2f5;color:#555;">Cancel</button>
-            <button class="btn btn-primary" onclick="saveFacility()">Save</button>
-        </div>
-    </div>
-</div>
-
-<script>
-let editMode = false;
-
-function showAlert(msg, type) {
-    const box = document.getElementById('alertBox');
-    box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
-    setTimeout(() => box.innerHTML = '', 4000);
-}
-
-function escHtml(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function loadFacilities() {
-    fetch('api/facilities.php?action=list')
-        .then(r => r.json())
-        .then(data => {
-            const tbody = document.getElementById('facilitiesBody');
-            if (!data.length) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#888;">No facilities found</td></tr>';
-                return;
+    try {
+        if ($action === 'create') {
+            $name = sanitizeInput($_POST['name'] ?? '');
+            $location = sanitizeInput($_POST['location'] ?? '');
+            $capacity = (int)($_POST['capacity'] ?? 0);
+            $isActive = !empty($_POST['is_active']) ? 1 : 0;
+            if ($name === '' || $location === '' || $capacity <= 0) {
+                redirectWithMessage('admin_facilities.php', 'danger', 'Invalid facility details.');
             }
-            tbody.innerHTML = data.map((f, i) => `
-                <tr>
-                    <td>${i + 1}</td>
-                    <td>${escHtml(f.name)}</td>
-                    <td>${escHtml(f.location)}</td>
-                    <td>${escHtml(f.capacity)}</td>
-                    <td><span class="badge badge-${f.status === 'available' ? 'available' : 'unavailable'}">${f.status}</span></td>
-                    <td>
-                        <button class="btn btn-warning btn-sm" onclick="openEditModal(${JSON.stringify(f).replace(/"/g,'&quot;')})">
-                            <i class="fas fa-edit"></i> Update
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteFacility(${f.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-        })
-        .catch(() => showAlert('Failed to load facilities', 'danger'));
-}
 
-function openAddModal() {
-    editMode = false;
-    document.getElementById('modalTitle').textContent = 'Add Facility';
-    document.getElementById('facilityId').value = '';
-    document.getElementById('facilityName').value = '';
-    document.getElementById('facilityLocation').value = '';
-    document.getElementById('facilityCapacity').value = '';
-    document.getElementById('facilityDescription').value = '';
-    document.getElementById('facilityStatus').value = 'available';
-    document.getElementById('facilityModal').classList.add('show');
-}
+            $photoPath = null;
+            if (!empty($_FILES['photo']['name'])) {
+                $file = $_FILES['photo'];
+                if (($file['error'] ?? UPLOAD_ERR_OK) === UPLOAD_ERR_OK) {
+                    $tmp = (string)$file['tmp_name'];
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $mime = $finfo ? finfo_file($finfo, $tmp) : '';
+                    if ($finfo) finfo_close($finfo);
+                    $ext = match ($mime) {
+                        'image/jpeg' => 'jpg',
+                        'image/png' => 'png',
+                        default => null
+                    };
+                    if ($ext) {
+                        $base = 'fac_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                        $rel = 'uploads/facility_photos/' . $base;
+                        $abs = __DIR__ . '/' . $rel;
+                        if (move_uploaded_file($tmp, $abs)) $photoPath = $rel;
+                    }
+                }
+            }
 
-function openEditModal(f) {
-    editMode = true;
-    document.getElementById('modalTitle').textContent = 'Update Facility';
-    document.getElementById('facilityId').value = f.id;
-    document.getElementById('facilityName').value = f.name;
-    document.getElementById('facilityLocation').value = f.location;
-    document.getElementById('facilityCapacity').value = f.capacity;
-    document.getElementById('facilityDescription').value = f.description || '';
-    document.getElementById('facilityStatus').value = f.status;
-    document.getElementById('facilityModal').classList.add('show');
-}
+            $stmt = $pdo->prepare('INSERT INTO facilities (name, location, capacity, photo_path, is_active, created_at) VALUES (?, ?, ?, ?, ?, NOW())');
+            $stmt->execute([$name, $location, $capacity, $photoPath, $isActive]);
+            redirectWithMessage('admin_facilities.php', 'success', 'Facility created.');
+        }
 
-function closeModal() {
-    document.getElementById('facilityModal').classList.remove('show');
-}
+        if ($action === 'toggle_active') {
+            $id = (int)($_POST['id'] ?? 0);
+            $stmt = $pdo->prepare('UPDATE facilities SET is_active = IF(is_active=1,0,1) WHERE id = ?');
+            $stmt->execute([$id]);
+            redirectWithMessage('admin_facilities.php', 'success', 'Facility status updated.');
+        }
 
-function saveFacility() {
-    const data = {
-        action: editMode ? 'update' : 'add',
-        id: document.getElementById('facilityId').value,
-        name: document.getElementById('facilityName').value.trim(),
-        location: document.getElementById('facilityLocation').value.trim(),
-        capacity: document.getElementById('facilityCapacity').value,
-        description: document.getElementById('facilityDescription').value.trim(),
-        status: document.getElementById('facilityStatus').value
-    };
-
-    if (!data.name || !data.location || !data.capacity) {
-        showAlert('Please fill in all required fields.', 'danger');
-        return;
+        if ($action === 'delete') {
+            $id = (int)($_POST['id'] ?? 0);
+            $stmt = $pdo->prepare('DELETE FROM facilities WHERE id = ?');
+            $stmt->execute([$id]);
+            redirectWithMessage('admin_facilities.php', 'success', 'Facility deleted.');
+        }
+    } catch (Throwable) {
+        redirectWithMessage('admin_facilities.php', 'danger', 'Action failed.');
     }
-
-    fetch('api/facilities.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showAlert(res.message || 'Saved!', 'success');
-            closeModal();
-            loadFacilities();
-        } else showAlert(res.message || 'Error', 'danger');
-    })
-    .catch(() => showAlert('Network error', 'danger'));
 }
 
-function deleteFacility(id) {
-    if (!confirm('Delete this facility?')) return;
-    fetch('api/facilities.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', id })
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) { showAlert('Deleted.', 'success'); loadFacilities(); }
-        else showAlert(res.message || 'Error', 'danger');
-    });
-}
+$rows = [];
+try {
+    $rows = $pdo->query('SELECT * FROM facilities ORDER BY created_at DESC, id DESC')->fetchAll();
+} catch (Throwable) {}
+?>
+<?php require_once __DIR__ . '/includes/header.php'; ?>
+<?php require_once __DIR__ . '/includes/navbar.php'; ?>
+<?php require_once __DIR__ . '/includes/admin_sidebar.php'; ?>
 
-document.getElementById('facilityModal').addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-});
+<h1 class="h4 fw-bold mb-3">Facilities</h1>
 
-loadFacilities();
-</script>
-</body>
-</html>
+<?php if ($flash): ?>
+  <div class="alert alert-<?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
+<?php endif; ?>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body p-4">
+    <h2 class="h6 fw-semibold mb-3">Add Facility</h2>
+    <form method="post" enctype="multipart/form-data" class="row g-2">
+      <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+      <input type="hidden" name="action" value="create">
+      <div class="col-md-3"><input class="form-control" name="name" placeholder="Name" required></div>
+      <div class="col-md-3"><input class="form-control" name="location" placeholder="Location" required></div>
+      <div class="col-md-2"><input class="form-control" type="number" min="1" name="capacity" placeholder="Capacity" required></div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">Photo (JPG/PNG)</label>
+        <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
+      </div>
+      <div class="col-md-1 d-flex align-items-center">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_active" id="facActive" checked>
+          <label class="form-check-label" for="facActive">Active</label>
+        </div>
+      </div>
+      <div class="col-md-1"><button class="btn btn-warning w-100 fw-semibold">Add</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-4">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Photo</th>
+            <th>Name</th>
+            <th>Location</th>
+            <th>Capacity</th>
+            <th>Active</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($rows as $r): ?>
+            <tr>
+              <td><?= (int)$r['id'] ?></td>
+              <td>
+                <?php $img = $r['photo_path'] ? (string)$r['photo_path'] : 'assets/images/ndmubg.jpg'; ?>
+                <img src="<?= e($img) ?>" width="58" height="40" style="object-fit:cover" class="rounded border" alt="photo">
+              </td>
+              <td><?= e((string)$r['name']) ?></td>
+              <td><?= e((string)$r['location']) ?></td>
+              <td><?= (int)$r['capacity'] ?></td>
+              <td><?= (int)$r['is_active'] === 1 ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>' ?></td>
+              <td class="text-end">
+                <div class="d-flex justify-content-end gap-2 flex-wrap">
+                  <form method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                    <input type="hidden" name="action" value="toggle_active">
+                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                    <button class="btn btn-sm btn-outline-secondary"><?= (int)$r['is_active'] === 1 ? 'Deactivate' : 'Activate' ?></button>
+                  </form>
+                  <form method="post" class="d-inline" onsubmit="return confirm('Delete this facility?');">
+                    <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<?php require_once __DIR__ . '/includes/admin_sidebar_end.php'; ?>
+<?php require_once __DIR__ . '/includes/footer.php'; ?>
+

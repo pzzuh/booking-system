@@ -18,21 +18,7 @@ if (!$dbUser) {
     redirectWithMessage('login.php', 'danger', 'Account not found.');
 }
 
-// NDMU Colleges only (for Dean / Adviser profile) — no Senior High School
-$ndmuColleges = [
-    'College of Arts and Sciences',
-    'College of Business and Accountancy',
-    'College of Computer Studies',
-    'College of Criminal Justice Education',
-    'College of Education',
-    'College of Engineering',
-    'College of Health Sciences',
-    'College of Law',
-    'Graduate School',
-    'Administration / Non-Academic',
-];
-
-// Full departments (for Student / Staff)
+// NDMU Colleges and Departments
 $ndmuDepartments = [
     'College of Arts and Sciences' => [
         'Bachelor of Arts in Communication',
@@ -87,6 +73,13 @@ $ndmuDepartments = [
         'Master of Science in Information Technology',
         'Doctor of Philosophy in Educational Management',
     ],
+    'Senior High School' => [
+        'Academic Track - STEM',
+        'Academic Track - ABM',
+        'Academic Track - HUMSS',
+        'Academic Track - GAS',
+        'TVL Track',
+    ],
     'Administration / Non-Academic' => [
         'Office of the President',
         'Office of the VP for Administration',
@@ -106,62 +99,86 @@ $ndmuDepartments = [
     ],
 ];
 
-// Roles that show NO department/college field at all (use gmail/office email instead)
-$rolesNoDept = ['ppss_director', 'avp_admin', 'vp_admin', 'president', 'janitor', 'security', 'dsa_director'];
-// Roles that show college names only (not individual programs)
-$rolesCollegeOnly = ['dean', 'adviser'];
-// Roles that show full department list
-$rolesFullDept = ['student', 'staff', 'admin'];
-
-$currentRole = (string)$dbUser['role'];
-
-$error = null;
+$error   = null;
 $success = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
 
+    // ── UPDATE PROFILE ──────────────────────────────────────────────────────
     if (!empty($_POST['action']) && $_POST['action'] === 'update_profile') {
-        $name       = sanitizeInput($_POST['full_name'] ?? '');
-        $phone      = sanitizeInput($_POST['phone'] ?? '');
-        $studentId  = sanitizeInput($_POST['student_id'] ?? '');
-        $department = sanitizeInput($_POST['department'] ?? '');
-        $officeEmail = sanitizeInput($_POST['office_email'] ?? '');
 
-        // Department is now admin-controlled (read-only in profile), just pass through
-        $department = sanitizeInput($_POST['department'] ?? (string)($dbUser['department'] ?? ''));
+        $name       = sanitizeInput($_POST['full_name']   ?? '');
+        $phone      = sanitizeInput($_POST['phone']       ?? '');
+        $department = sanitizeInput($_POST['department']  ?? '');
+        $studentId  = sanitizeInput($_POST['student_id']  ?? '');
 
-        if ($name === '' || $phone === '' || $studentId === '') {
+        $isAdmin = ((string)$dbUser['role'] === 'admin');
+
+        // Build flat department list for validation
+        $allDepts = [];
+        foreach ($ndmuDepartments as $college => $depts) {
+            foreach ($depts as $d) {
+                $allDepts[] = $d;
+            }
+        }
+
+        if ($name === '' || $phone === '') {
             $error = 'Please complete all required profile fields.';
+        } elseif (!$isAdmin && ($department === '' || $studentId === '')) {
+            $error = 'Please complete all profile fields.';
+        } elseif (!$isAdmin && !in_array($department, $allDepts, true)) {
+            $error = 'Please select a valid department.';
         } else {
             $photoPath = (string)($dbUser['profile_photo'] ?? '');
+
             if (!empty($_FILES['profile_photo']['name'])) {
                 $file = $_FILES['profile_photo'];
+
                 if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     $error = 'Photo upload failed.';
                 } else {
                     $size = (int)($file['size'] ?? 0);
+
                     if ($size > (2 * 1024 * 1024)) {
                         $error = 'Profile photo must be under 2MB.';
                     } else {
-                        $tmp  = (string)($file['tmp_name'] ?? '');
+                        $tmp   = (string)($file['tmp_name'] ?? '');
                         $finfo = finfo_open(FILEINFO_MIME_TYPE);
                         $mime  = $finfo ? finfo_file($finfo, $tmp) : '';
                         if ($finfo) finfo_close($finfo);
+
                         $ext = match ($mime) {
                             'image/jpeg' => 'jpg',
                             'image/png'  => 'png',
                             default      => null
                         };
+
                         if (!$ext) {
                             $error = 'Only JPG/PNG images are allowed.';
                         } else {
+                            $uploadDir = __DIR__ . '/uploads/profile_photos/';
+
+                            // ── FIX: auto-create the directory if it doesn't exist ──
+                            if (!is_dir($uploadDir)) {
+                                mkdir($uploadDir, 0755, true);
+                            }
+
                             $baseName = 'u' . (int)$dbUser['id'] . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
                             $destRel  = 'uploads/profile_photos/' . $baseName;
-                            $destAbs  = __DIR__ . '/' . $destRel;
+                            $destAbs  = $uploadDir . $baseName;
+
                             if (!move_uploaded_file($tmp, $destAbs)) {
                                 $error = 'Unable to save uploaded photo.';
                             } else {
+                                // Delete old photo if it exists and is not the default
+                                $oldPhoto = (string)($dbUser['profile_photo'] ?? '');
+                                if ($oldPhoto !== '' && $oldPhoto !== 'assets/images/ndmulogo.png') {
+                                    $oldAbs = __DIR__ . '/' . $oldPhoto;
+                                    if (is_file($oldAbs)) {
+                                        @unlink($oldAbs);
+                                    }
+                                }
                                 $photoPath = $destRel;
                             }
                         }
@@ -170,27 +187,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if (!$error) {
-                // For no-dept roles, store office email in department column as workaround,
-                // or store it in a dedicated field. Here we store office_email in the email column
-                // only if user explicitly sets it (optional). We store department normally.
-                $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, department=?, student_id=?, profile_photo=? WHERE id=?');
-                $stmt->execute([$name, $phone, $department, $studentId, $photoPath, (int)$dbUser['id']]);
-
-                // Update office email if provided (for no-dept roles)
-                if (in_array($currentRole, $rolesNoDept, true) && $officeEmail !== '' && filter_var($officeEmail, FILTER_VALIDATE_EMAIL)) {
-                    $stmt2 = $pdo->prepare('UPDATE users SET email=? WHERE id=?');
-                    $stmt2->execute([$officeEmail, (int)$dbUser['id']]);
+                if ($isAdmin) {
+                    $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, profile_photo=? WHERE id=?');
+                    $stmt->execute([$name, $phone, $photoPath, (int)$dbUser['id']]);
+                } else {
+                    $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, department=?, student_id=?, profile_photo=? WHERE id=?');
+                    $stmt->execute([$name, $phone, $department, $studentId, $photoPath, (int)$dbUser['id']]);
                 }
-
                 $_SESSION['user']['name'] = $name;
                 $success = 'Profile updated successfully.';
             }
         }
     }
 
+    // ── CHANGE PASSWORD ─────────────────────────────────────────────────────
     if (!empty($_POST['action']) && $_POST['action'] === 'change_password') {
-        $current = (string)($_POST['current_password'] ?? '');
-        $new     = (string)($_POST['new_password'] ?? '');
+        $current = (string)($_POST['current_password']     ?? '');
+        $new     = (string)($_POST['new_password']         ?? '');
         $confirm = (string)($_POST['confirm_new_password'] ?? '');
 
         if ($current === '' || $new === '' || $confirm === '') {
@@ -209,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Refresh from DB
+    // Refresh from DB after any update
     $stmt = $pdo->prepare('SELECT id, full_name, email, phone, department, student_id, role, profile_photo, password_hash FROM users WHERE id = ?');
     $stmt->execute([(int)$user['id']]);
     $dbUser = $stmt->fetch();
@@ -218,7 +231,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $photo    = (string)($dbUser['profile_photo'] ?? '');
 $photoSrc = $photo !== '' ? $photo : 'assets/images/ndmulogo.png';
 
-// Role label helper
 $roleLabels = [
     'student'        => 'Student',
     'adviser'        => 'Adviser',
@@ -226,19 +238,20 @@ $roleLabels = [
     'dsa_director'   => 'DSA Director',
     'ppss_director'  => 'PPSS Director',
     'dean'           => 'Dean',
-    'avp_admin'      => 'Administrative Vice President',
-    'vp_admin'       => 'Vice President',
+    'avp_admin'      => 'AVP Admin',
+    'vp_admin'       => 'VP Admin',
     'president'      => 'President',
     'admin'          => 'Admin',
-    'janitor'        => 'Janitorial',
+    'janitor'        => 'Janitor',
     'security'       => 'Security',
 ];
-$roleLabel = $roleLabels[$currentRole] ?? ucfirst($currentRole);
+$roleLabel = $roleLabels[(string)$dbUser['role']] ?? ucfirst((string)$dbUser['role']);
 ?>
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 <?php require_once __DIR__ . '/includes/navbar.php'; ?>
 
 <div class="container py-4">
+
     <?php if ($flash): ?>
         <div class="alert alert-<?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
     <?php endif; ?>
@@ -250,7 +263,8 @@ $roleLabel = $roleLabels[$currentRole] ?? ucfirst($currentRole);
     <?php endif; ?>
 
     <div class="row g-4">
-        <!-- Sidebar card -->
+
+        <!-- ── PROFILE CARD ─────────────────────────────────────────────── -->
         <div class="col-lg-4">
             <div class="card shadow-sm">
                 <div class="card-body text-center">
@@ -261,74 +275,70 @@ $roleLabel = $roleLabels[$currentRole] ?? ucfirst($currentRole);
                     <div class="mt-2">
                         <span class="badge bg-primary"><?= e($roleLabel) ?></span>
                     </div>
+                    <?php if ((string)$dbUser['role'] === 'student'): ?>
+                        <div class="text-muted small mt-2">Contact an administrator to update your role.</div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
 
-        <!-- Edit Profile -->
         <div class="col-lg-8">
+
+            <!-- ── EDIT PROFILE ──────────────────────────────────────────── -->
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <h2 class="h5 fw-semibold mb-3">Edit Profile</h2>
                     <form method="post" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
-                        <input type="hidden" name="action" value="update_profile">
-
+                        <input type="hidden" name="action"     value="update_profile">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Name</label>
-                                <input class="form-control" name="full_name" required
-                                       value="<?= e((string)$dbUser['full_name']) ?>">
+                                <input class="form-control" name="full_name" required value="<?= e((string)$dbUser['full_name']) ?>">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Phone</label>
-                                <input class="form-control" name="phone" required
-                                       value="<?= e((string)($dbUser['phone'] ?? '')) ?>">
+                                <input class="form-control" name="phone" required value="<?= e((string)($dbUser['phone'] ?? '')) ?>">
                             </div>
+                            <?php if ((string)$dbUser['role'] !== 'admin'): ?>
                             <div class="col-md-6">
                                 <label class="form-label">Student / Employee ID</label>
-                                <input class="form-control" name="student_id" required
-                                       value="<?= e((string)($dbUser['student_id'] ?? '')) ?>">
+                                <input class="form-control" name="student_id" required value="<?= e((string)($dbUser['student_id'] ?? '')) ?>">
                             </div>
-
-                            <?php if (in_array($currentRole, $rolesNoDept, true)): ?>
-                                <!-- No dept field; show office/gmail field -->
-                                <div class="col-md-6">
-                                    <label class="form-label">Office Email (Gmail)</label>
-                                    <input class="form-control" type="email" name="office_email"
-                                           placeholder="e.g. office@gmail.com"
-                                           value="<?= e((string)$dbUser['email']) ?>">
-                                </div>
-                            <?php else: ?>
-                                <!-- Department / College — read-only, set by admin -->
-                                <div class="col-md-6">
-                                    <label class="form-label">College / Department
-                                        <span class="text-muted small">(set by Admin)</span>
-                                    </label>
-                                    <input class="form-control bg-light" type="text" readonly
-                                           value="<?= e((string)($dbUser['department'] ?? 'Not yet assigned')) ?>">
-                                    <input type="hidden" name="department" value="<?= e((string)($dbUser['department'] ?? '')) ?>">
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label">College / Department</label>
+                                <select class="form-select" name="department" required>
+                                    <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select —</option>
+                                    <?php foreach ($ndmuDepartments as $college => $depts): ?>
+                                        <optgroup label="<?= e($college) ?>">
+                                            <?php foreach ($depts as $dept): ?>
+                                                <option value="<?= e($dept) ?>"
+                                                    <?= ((string)($dbUser['department'] ?? '') === $dept) ? 'selected' : '' ?>>
+                                                    <?= e($dept) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </optgroup>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                             <?php endif; ?>
-
                             <div class="col-12">
                                 <label class="form-label">Profile Photo <span class="text-muted">(JPG/PNG, &lt; 2MB)</span></label>
                                 <input class="form-control" type="file" name="profile_photo" accept="image/jpeg,image/png">
                             </div>
                         </div>
-
                         <button class="btn btn-warning mt-3 fw-semibold">Save Changes</button>
                     </form>
                 </div>
             </div>
 
-            <!-- Change Password -->
+            <!-- ── CHANGE PASSWORD ───────────────────────────────────────── -->
             <div class="card shadow-sm">
                 <div class="card-body">
                     <h2 class="h5 fw-semibold mb-3">Change Password</h2>
                     <form method="post">
                         <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
-                        <input type="hidden" name="action" value="change_password">
+                        <input type="hidden" name="action"     value="change_password">
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Current Password</label>
@@ -362,6 +372,7 @@ $roleLabel = $roleLabels[$currentRole] ?? ucfirst($currentRole);
                     </form>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
