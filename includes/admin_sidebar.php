@@ -18,6 +18,8 @@ declare(strict_types=1);
       <a class="nav-link text-white" href="admin_maintenance.php"><i class="fa-solid fa-screwdriver-wrench me-2"></i>Maintenance</a>
       <a class="nav-link text-white" href="admin_reports.php"><i class="fa-solid fa-chart-column me-2"></i>Reports</a>
       <a class="nav-link text-white" href="admin_settings.php"><i class="fa-solid fa-gear me-2"></i>Settings</a>
+      <hr class="border-secondary my-2">
+      <a class="nav-link text-white-50" href="logout.php"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a>
     </div>
   </aside>
   <main class="flex-grow-1 p-3 p-md-4">

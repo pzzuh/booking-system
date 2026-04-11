@@ -50,7 +50,7 @@ if ($user) {
             </a>
           </li>
           <li class="nav-item">
-            <span class="navbar-text small text-white-50"><?= e((string)$user['name']) ?></span>
+            <span class="navbar-text small text-white-50"><?= e((string)($user['full_name'] ?? $user['name'] ?? '')) ?></span>
           </li>
           <li class="nav-item">
             <a class="btn btn-sm btn-outline-light" href="logout.php">Logout</a>

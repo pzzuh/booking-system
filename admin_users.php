@@ -24,16 +24,91 @@ $roles = [
     'security'      => 'Security',
 ];
 
+// Departments list for dropdown (no Senior High School)
+$allDepartments = [
+    'College of Arts and Sciences' => [
+        'Bachelor of Arts in Communication',
+        'Bachelor of Arts in English Language Studies',
+        'Bachelor of Science in Biology',
+        'Bachelor of Science in Mathematics',
+        'Bachelor of Science in Psychology',
+        'Bachelor of Science in Social Work',
+    ],
+    'College of Business and Accountancy' => [
+        'Bachelor of Science in Accountancy',
+        'Bachelor of Science in Business Administration - Financial Management',
+        'Bachelor of Science in Business Administration - Human Resource Management',
+        'Bachelor of Science in Business Administration - Marketing Management',
+        'Bachelor of Science in Business Administration - Operations Management',
+    ],
+    'College of Computer Studies' => [
+        'Bachelor of Science in Computer Science',
+        'Bachelor of Science in Information Technology',
+        'Bachelor of Science in Information Systems',
+    ],
+    'College of Criminal Justice Education' => [
+        'Bachelor of Science in Criminology',
+    ],
+    'College of Education' => [
+        'Bachelor of Elementary Education',
+        'Bachelor of Secondary Education - English',
+        'Bachelor of Secondary Education - Mathematics',
+        'Bachelor of Secondary Education - Science',
+        'Bachelor of Secondary Education - Social Studies',
+        'Bachelor of Physical Education',
+    ],
+    'College of Engineering' => [
+        'Bachelor of Science in Civil Engineering',
+        'Bachelor of Science in Electrical Engineering',
+        'Bachelor of Science in Electronics Engineering',
+        'Bachelor of Science in Mechanical Engineering',
+    ],
+    'College of Health Sciences' => [
+        'Bachelor of Science in Nursing',
+        'Bachelor of Science in Pharmacy',
+        'Bachelor of Science in Medical Technology',
+        'Bachelor of Science in Physical Therapy',
+        'Bachelor of Science in Radiologic Technology',
+    ],
+    'College of Law' => [
+        'Juris Doctor',
+    ],
+    'Graduate School' => [
+        'Master of Arts in Education',
+        'Master of Business Administration',
+        'Master of Science in Information Technology',
+        'Doctor of Philosophy in Educational Management',
+    ],
+    'Administration / Non-Academic' => [
+        'Office of the President',
+        'Office of the VP for Administration',
+        'Office of the VP for Academics',
+        'Office of the AVP for Admin',
+        'Dean\'s Office',
+        'Director of Student Affairs (DSA)',
+        'Physical Plant and Security Services (PPSS)',
+        'Registrar\'s Office',
+        'Finance Office',
+        'Human Resources Office',
+        'Information Technology Office',
+        'Library',
+        'Guidance and Counseling Center',
+        'Campus Ministry',
+        'Athletics',
+    ],
+];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
     $action = sanitizeInput($_POST['action'] ?? '');
 
     try {
         if ($action === 'create') {
-            $name  = sanitizeInput($_POST['full_name'] ?? '');
-            $email = sanitizeInput($_POST['email'] ?? '');
-            $role  = sanitizeInput($_POST['role'] ?? 'student');
-            $pwd   = (string)($_POST['password'] ?? '');
+            $name       = sanitizeInput($_POST['full_name'] ?? '');
+            $email      = sanitizeInput($_POST['email'] ?? '');
+            $role       = sanitizeInput($_POST['role'] ?? 'student');
+            $pwd        = (string)($_POST['password'] ?? '');
+            $department = sanitizeInput($_POST['department'] ?? '');
 
             if ($name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)
                 || $pwd === '' || strlen($pwd) < 8 || !array_key_exists($role, $roles)) {
@@ -45,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirectWithMessage('admin_users.php', 'danger', 'Email already exists.');
             }
             $hash = password_hash($pwd, PASSWORD_BCRYPT);
-            $stmt = $pdo->prepare('INSERT INTO users (full_name, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, NOW())');
-            $stmt->execute([$name, $email, $hash, $role]);
+            $stmt = $pdo->prepare('INSERT INTO users (full_name, email, password_hash, role, department, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())');
+            $stmt->execute([$name, $email, $hash, $role, $department]);
             redirectWithMessage('admin_users.php', 'success', 'User created successfully.');
         }
 
@@ -149,6 +224,18 @@ try {
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="col-md-3">
+                <select class="form-select" name="department">
+                    <option value="">— Department (optional) —</option>
+                    <?php foreach ($allDepartments as $college => $depts): ?>
+                        <optgroup label="<?= e($college) ?>">
+                            <?php foreach ($depts as $dept): ?>
+                                <option value="<?= e($dept) ?>"><?= e($dept) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-2">
                 <input class="form-control" type="password" name="password" placeholder="Temp password (8+ chars)" required>
             </div>
@@ -215,14 +302,25 @@ try {
                                     <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
                                     <input type="hidden" name="action" value="update_user">
                                     <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                    <!-- Hidden fields for role & dept so the form carries them -->
-                                    <input type="hidden" name="role" value="<?= e((string)$u['role']) ?>" class="role-hidden-<?= (int)$u['id'] ?>">
-                                    <input type="hidden" name="department" value="<?= e((string)($u['department'] ?? '')) ?>" class="dept-hidden-<?= (int)$u['id'] ?>">
+                                    <input type="hidden" name="role" value="<?= e((string)$u['role']) ?>">
                                     <input class="form-control form-control-sm" name="full_name"
                                            value="<?= e((string)$u['full_name']) ?>" required>
                                     <input class="form-control form-control-sm text-muted" name="student_id"
                                            placeholder="ID number"
                                            value="<?= e((string)($u['student_id'] ?? '')) ?>">
+                                    <select class="form-select form-select-sm" name="department">
+                                        <option value="">— Department —</option>
+                                        <?php foreach ($allDepartments as $college => $depts): ?>
+                                            <optgroup label="<?= e($college) ?>">
+                                                <?php foreach ($depts as $dept): ?>
+                                                    <option value="<?= e($dept) ?>"
+                                                        <?= ((string)($u['department'] ?? '') === $dept) ? 'selected' : '' ?>>
+                                                        <?= e($dept) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </optgroup>
+                                        <?php endforeach; ?>
+                                    </select>
                                     <button class="btn btn-sm btn-outline-primary mt-1">Update</button>
                                 </form>
                             </td>

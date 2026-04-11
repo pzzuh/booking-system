@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if ($action === 'force_reject') {
                 if ($reason === '') $reason = 'Rejected by admin.';
-                $stmt = $pdo->prepare("UPDATE item_bookings SET status='rejected', current_approval_role=NULL WHERE id=?");
+                $stmt = $pdo->prepare("UPDATE item_bookings SET status='rejected', current_approval_role=NULL, rejection_reason=? WHERE id=?");
                 $stmt->execute([$reason, $id]);
                 redirectWithMessage('admin_bookings.php?tab=item', 'success', 'Item booking rejected.');
             }

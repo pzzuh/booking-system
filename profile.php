@@ -18,7 +18,7 @@ if (!$dbUser) {
     redirectWithMessage('login.php', 'danger', 'Account not found.');
 }
 
-// NDMU Colleges only (for Dean / Adviser profile)
+// NDMU Colleges only (for Dean / Adviser profile) — no Senior High School
 $ndmuColleges = [
     'College of Arts and Sciences',
     'College of Business and Accountancy',
@@ -29,7 +29,6 @@ $ndmuColleges = [
     'College of Health Sciences',
     'College of Law',
     'Graduate School',
-    'Senior High School',
     'Administration / Non-Academic',
 ];
 
@@ -88,13 +87,6 @@ $ndmuDepartments = [
         'Master of Science in Information Technology',
         'Doctor of Philosophy in Educational Management',
     ],
-    'Senior High School' => [
-        'Academic Track - STEM',
-        'Academic Track - ABM',
-        'Academic Track - HUMSS',
-        'Academic Track - GAS',
-        'TVL Track',
-    ],
     'Administration / Non-Academic' => [
         'Office of the President',
         'Office of the VP for Administration',
@@ -136,28 +128,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $department = sanitizeInput($_POST['department'] ?? '');
         $officeEmail = sanitizeInput($_POST['office_email'] ?? '');
 
-        // Validate department based on role
-        $deptError = false;
-        if (in_array($currentRole, $rolesNoDept, true)) {
-            $department = ''; // not used
-        } elseif (in_array($currentRole, $rolesCollegeOnly, true)) {
-            if (!in_array($department, $ndmuColleges, true)) {
-                $deptError = true;
-            }
-        } else {
-            $allDepts = [];
-            foreach ($ndmuDepartments as $depts) {
-                foreach ($depts as $d) { $allDepts[] = $d; }
-            }
-            if (!in_array($department, $allDepts, true)) {
-                $deptError = true;
-            }
-        }
+        // Department is now admin-controlled (read-only in profile), just pass through
+        $department = sanitizeInput($_POST['department'] ?? (string)($dbUser['department'] ?? ''));
 
         if ($name === '' || $phone === '' || $studentId === '') {
             $error = 'Please complete all required profile fields.';
-        } elseif ($deptError) {
-            $error = 'Please select a valid department/college.';
         } else {
             $photoPath = (string)($dbUser['profile_photo'] ?? '');
             if (!empty($_FILES['profile_photo']['name'])) {
@@ -324,37 +299,15 @@ $roleLabel = $roleLabels[$currentRole] ?? ucfirst($currentRole);
                                            placeholder="e.g. office@gmail.com"
                                            value="<?= e((string)$dbUser['email']) ?>">
                                 </div>
-                            <?php elseif (in_array($currentRole, $rolesCollegeOnly, true)): ?>
-                                <!-- College name only -->
-                                <div class="col-md-6">
-                                    <label class="form-label">College</label>
-                                    <select class="form-select" name="department" required>
-                                        <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select College —</option>
-                                        <?php foreach ($ndmuColleges as $college): ?>
-                                            <option value="<?= e($college) ?>"
-                                                <?= ((string)($dbUser['department'] ?? '') === $college) ? 'selected' : '' ?>>
-                                                <?= e($college) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
                             <?php else: ?>
-                                <!-- Full department list -->
+                                <!-- Department / College — read-only, set by admin -->
                                 <div class="col-md-6">
-                                    <label class="form-label">College / Department</label>
-                                    <select class="form-select" name="department" required>
-                                        <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select —</option>
-                                        <?php foreach ($ndmuDepartments as $college => $depts): ?>
-                                            <optgroup label="<?= e($college) ?>">
-                                                <?php foreach ($depts as $dept): ?>
-                                                    <option value="<?= e($dept) ?>"
-                                                        <?= ((string)($dbUser['department'] ?? '') === $dept) ? 'selected' : '' ?>>
-                                                        <?= e($dept) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </optgroup>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <label class="form-label">College / Department
+                                        <span class="text-muted small">(set by Admin)</span>
+                                    </label>
+                                    <input class="form-control bg-light" type="text" readonly
+                                           value="<?= e((string)($dbUser['department'] ?? 'Not yet assigned')) ?>">
+                                    <input type="hidden" name="department" value="<?= e((string)($dbUser['department'] ?? '')) ?>">
                                 </div>
                             <?php endif; ?>
 

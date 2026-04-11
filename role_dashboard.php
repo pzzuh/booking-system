@@ -307,7 +307,7 @@ $totalPages = max(1, (int)ceil($totalRows / $perPage));
                     </thead>
                     <tbody>
                         <?php foreach ($allRows as $r): ?>
-                            <tr class="pointer" onclick="window.location.href='booking_detail.php?id=<?= (int)$r['id'] ?>'">
+                            <tr class="pointer" onclick="window.location.href='booking_detail.php?type=<?= e($bookingType) ?>&id=<?= (int)$r['id'] ?>'">
                                 <td><?= (int)$r['id'] ?></td>
                                 <td><?= e((string)$r['label']) ?></td>
                                 <td><?= e((string)$r['student_name']) ?></td>
