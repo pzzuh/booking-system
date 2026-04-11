@@ -61,14 +61,14 @@ try {
     <div class="card shadow-sm"><div class="card-body">
       <div class="text-muted small">Facility Bookings</div>
       <div class="fs-4 fw-bold"><?= (int)$stats['facility_bookings'] ?></div>
-      <a href="admin_bookings.php" class="small">View bookings</a>
+      <a href="admin_bookings.php?tab=facility&status=" class="small">View bookings</a>
     </div></div>
   </div>
   <div class="col-md-6">
     <div class="card shadow-sm"><div class="card-body">
       <div class="text-muted small">Item Bookings</div>
       <div class="fs-4 fw-bold"><?= (int)$stats['item_bookings'] ?></div>
-      <a href="admin_bookings.php" class="small">View bookings</a>
+      <a href="admin_bookings.php?tab=item&status=" class="small">View bookings</a>
     </div></div>
   </div>
 </div>

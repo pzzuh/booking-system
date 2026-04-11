@@ -32,10 +32,6 @@ if ($itemId <= 0 || $qty <= 0 || $borrowDate === '' || $returnDate === '' || $bo
     exit;
 }
 
-// FIX: merge separate date+time fields into DATETIME strings for date_start / date_end
-$start = "{$borrowDate} {$borrowTime}:00";
-$end   = "{$returnDate} {$returnTime}:00";
-
 try {
     $stmt = $pdo->prepare('SELECT quantity_available, name FROM items WHERE id = ?');
     $stmt->execute([$itemId]);
@@ -48,18 +44,15 @@ try {
 
     $availableNow = (int)$item['quantity_available'];
 
-    // FIX: quantity_needed  → quantity_requested
-    //      CONCAT(borrow_date,' ',borrow_time) → date_start
-    //      CONCAT(return_date,' ',return_time) → date_end
     $stmt = $pdo->prepare(
-        "SELECT COALESCE(SUM(quantity_requested), 0)
+        "SELECT COALESCE(SUM(quantity_needed), 0)
          FROM item_bookings
          WHERE item_id = ?
            AND status NOT IN ('rejected','cancelled')
-           AND date_start < ?
-           AND date_end   > ?"
+           AND CONCAT(borrow_date, ' ', borrow_time) < CONCAT(?, ' ', ?)
+           AND CONCAT(return_date, ' ', return_time)  > CONCAT(?, ' ', ?)"
     );
-    $stmt->execute([$itemId, $end, $start]);
+    $stmt->execute([$itemId, $returnDate, $returnTime, $borrowDate, $borrowTime]);
     $reserved = (int)$stmt->fetchColumn();
 
     $effective = $availableNow - $reserved;

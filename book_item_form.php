@@ -23,25 +23,21 @@ if (!$item) {
 $flash = getFlash();
 $error = null;
 
-// FIX: use actual DB columns — quantity_requested, date_start, date_end (DATETIME)
-function itemIsAvailable(PDO $pdo, int $itemId, int $qtyNeeded, string $borrowStart, string $returnEnd): array
+function itemIsAvailable(PDO $pdo, int $itemId, int $qtyNeeded, string $borrowDate, string $borrowTime, string $returnDate, string $returnTime): array
 {
     $stmt = $pdo->prepare('SELECT quantity_available FROM items WHERE id = ?');
     $stmt->execute([$itemId]);
     $availableNow = (int)$stmt->fetchColumn();
 
-    // FIX: quantity_needed → quantity_requested
-    //      CONCAT(borrow_date,' ',borrow_time) → date_start
-    //      CONCAT(return_date,' ',return_time) → date_end
     $stmt = $pdo->prepare(
-        "SELECT COALESCE(SUM(quantity_requested), 0)
+        "SELECT COALESCE(SUM(quantity_needed), 0)
          FROM item_bookings
          WHERE item_id = ?
            AND status NOT IN ('rejected','cancelled')
-           AND date_start < ?
-           AND date_end   > ?"
+           AND CONCAT(borrow_date, ' ', borrow_time) < CONCAT(?, ' ', ?)
+           AND CONCAT(return_date, ' ', return_time)  > CONCAT(?, ' ', ?)"
     );
-    $stmt->execute([$itemId, $returnEnd, $borrowStart]);
+    $stmt->execute([$itemId, $returnDate, $returnTime, $borrowDate, $borrowTime]);
     $reserved = (int)$stmt->fetchColumn();
 
     $effective = $availableNow - $reserved;
@@ -66,12 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($qty <= 0 || $purpose === '' || $borrowDate === '' || $returnDate === '' || $borrowTime === '' || $returnTime === '') {
         $error = 'Please complete all required fields.';
     } else {
-        // FIX: merge separate date+time fields into DATETIME strings for date_start / date_end
-        $start = "{$borrowDate} {$borrowTime}:00";
-        $end   = "{$returnDate} {$returnTime}:00";
-
         try {
-            [$ok, $msg] = itemIsAvailable($pdo, $itemId, $qty, $start, $end);
+            [$ok, $msg] = itemIsAvailable($pdo, $itemId, $qty, $borrowDate, $borrowTime, $returnDate, $returnTime);
 
             if (!$ok) {
                 $error = $msg;
@@ -87,20 +79,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->rollBack();
                     $error = 'Not enough quantity available right now.';
                 } else {
-                    // FIX: INSERT uses quantity_requested, date_start, date_end
-                    //      (no separate borrow_date/return_date/borrow_time/return_time columns in DB)
                     $stmt = $pdo->prepare(
                         'INSERT INTO item_bookings
-                            (user_id, item_id, quantity_requested, date_start, date_end,
-                             purpose, notes, status, current_approval_role, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
+                            (user_id, item_id, quantity_needed, borrow_date, return_date,
+                             borrow_time, return_time, purpose, notes, status, current_approval_role, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
                     );
                     $stmt->execute([
                         (int)$user['id'],
                         $itemId,
                         $qty,
-                        $start,   // date_start  = "YYYY-MM-DD HH:MM:SS"
-                        $end,     // date_end    = "YYYY-MM-DD HH:MM:SS"
+                        $borrowDate,
+                        $returnDate,
+                        $borrowTime,
+                        $returnTime,
                         $purpose,
                         $notes,
                     ]);
