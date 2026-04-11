@@ -189,7 +189,7 @@ $totalPages = max(1, (int)ceil($totalRows / $perPage));
                                             <button class="btn btn-sm btn-success">APPROVE</button>
                                         </form>
                                         <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rjF<?= (int)$b['id'] ?>">REJECT</button>
-                                        <a class="btn btn-sm btn-outline-secondary" href="booking_detail.php?id=<?= (int)$b['id'] ?>">Details</a>
+                                        <a class="btn btn-sm btn-outline-secondary" href="booking_detail.php?type=facility&id=<?= (int)$b['id'] ?>">Details</a>
                                     </div>
                                     <div class="modal fade" id="rjF<?= (int)$b['id'] ?>" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
@@ -242,6 +242,7 @@ $totalPages = max(1, (int)ceil($totalRows / $perPage));
                                             <button class="btn btn-sm btn-success">APPROVE</button>
                                         </form>
                                         <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rjI<?= (int)$b['id'] ?>">REJECT</button>
+                                        <a class="btn btn-sm btn-outline-secondary" href="booking_detail.php?type=item&id=<?= (int)$b['id'] ?>">Details</a>
                                     </div>
                                     <div class="modal fade" id="rjI<?= (int)$b['id'] ?>" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-dialog-centered"><div class="modal-content">

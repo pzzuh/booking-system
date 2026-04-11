@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if ($action === 'force_reject') {
                 if ($reason === '') $reason = 'Rejected by admin.';
-                $stmt = $pdo->prepare("UPDATE item_bookings SET status='rejected', current_approval_role=NULL WHERE id=?");
+                $stmt = $pdo->prepare("UPDATE item_bookings SET status='rejected', current_approval_role=NULL, rejection_reason=? WHERE id=?");
                 $stmt->execute([$reason, $id]);
                 redirectWithMessage('admin_bookings.php', 'success', 'Item booking rejected.');
             }
@@ -141,7 +141,7 @@ try {
                         <?php foreach ($facilityRows as $r): ?>
                             <tr>
                                 <td><?= (int)$r['id'] ?></td>
-                                <td><a href="booking_detail.php?id=<?= (int)$r['id'] ?>"><?= e((string)$r['title']) ?></a></td>
+                                <td><a href="booking_detail.php?type=facility&id=<?= (int)$r['id'] ?>"><?= e((string)$r['title']) ?></a></td>
                                 <td><?= e((string)$r['student_name']) ?></td>
                                 <td><?= e((string)$r['facility_name']) ?></td>
                                 <td class="small"><?= e((string)$r['date_start']) ?> → <?= e((string)$r['date_end']) ?></td>

@@ -143,6 +143,23 @@ CREATE TABLE IF NOT EXISTS item_bookings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================
+-- ITEM BOOKING APPROVALS
+-- Required for item booking approval history tracking
+-- =============================================================
+CREATE TABLE IF NOT EXISTS item_booking_approvals (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id          INT NOT NULL,
+    role                VARCHAR(50) NOT NULL,
+    approver_user_id    INT NOT NULL,
+    action              ENUM('approve','reject') NOT NULL,
+    notes               TEXT,
+    rejection_reason    TEXT,
+    action_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id)        REFERENCES item_bookings(id) ON DELETE CASCADE,
+    FOREIGN KEY (approver_user_id)  REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================
 -- MAINTENANCE ALERTS
 -- =============================================================
 CREATE TABLE IF NOT EXISTS maintenance_alerts (
@@ -223,6 +240,7 @@ CREATE INDEX idx_item_bookings_user_id              ON item_bookings(user_id);
 CREATE INDEX idx_item_bookings_item_id              ON item_bookings(item_id);
 CREATE INDEX idx_item_bookings_status               ON item_bookings(status);
 CREATE INDEX idx_item_bookings_approval_role        ON item_bookings(current_approval_role);
+CREATE INDEX idx_item_booking_approvals_booking      ON item_booking_approvals(booking_id);
 CREATE INDEX idx_maintenance_alerts_facility_id     ON maintenance_alerts(facility_id);
 CREATE INDEX idx_maintenance_alerts_role            ON maintenance_alerts(assigned_to_role);
 CREATE INDEX idx_maintenance_alerts_status          ON maintenance_alerts(status);

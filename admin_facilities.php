@@ -48,6 +48,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirectWithMessage('admin_facilities.php', 'success', 'Facility created.');
         }
 
+        if ($action === 'update') {
+            $id = (int)($_POST['id'] ?? 0);
+            $name = sanitizeInput($_POST['name'] ?? '');
+            $location = sanitizeInput($_POST['location'] ?? '');
+            $capacity = (int)($_POST['capacity'] ?? 0);
+            if ($name === '' || $location === '' || $capacity <= 0) {
+                redirectWithMessage('admin_facilities.php', 'danger', 'Invalid facility details.');
+            }
+
+            $photoPath = null;
+            if (!empty($_FILES['photo']['name'])) {
+                $file = $_FILES['photo'];
+                if (($file['error'] ?? UPLOAD_ERR_OK) === UPLOAD_ERR_OK) {
+                    $tmp = (string)$file['tmp_name'];
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $mime = $finfo ? finfo_file($finfo, $tmp) : '';
+                    if ($finfo) finfo_close($finfo);
+                    $ext = match ($mime) {
+                        'image/jpeg' => 'jpg',
+                        'image/png' => 'png',
+                        default => null
+                    };
+                    if ($ext) {
+                        $base = 'fac_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                        $rel = 'uploads/facility_photos/' . $base;
+                        $abs = __DIR__ . '/' . $rel;
+                        if (move_uploaded_file($tmp, $abs)) $photoPath = $rel;
+                    }
+                }
+            }
+
+            if ($photoPath) {
+                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=?, photo_path=? WHERE id=?');
+                $stmt->execute([$name, $location, $capacity, $photoPath, $id]);
+            } else {
+                $stmt = $pdo->prepare('UPDATE facilities SET name=?, location=?, capacity=? WHERE id=?');
+                $stmt->execute([$name, $location, $capacity, $id]);
+            }
+            redirectWithMessage('admin_facilities.php', 'success', 'Facility updated.');
+        }
+
         if ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
             $stmt = $pdo->prepare('UPDATE facilities SET is_active = IF(is_active=1,0,1) WHERE id = ?');
@@ -134,6 +175,7 @@ try {
               <td><?= (int)$r['is_active'] === 1 ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>' ?></td>
               <td class="text-end">
                 <div class="d-flex justify-content-end gap-2 flex-wrap">
+                  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#updFac<?= (int)$r['id'] ?>">Update</button>
                   <form method="post" class="d-inline">
                     <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
                     <input type="hidden" name="action" value="toggle_active">
@@ -146,6 +188,44 @@ try {
                     <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
                     <button class="btn btn-sm btn-outline-danger">Delete</button>
                   </form>
+                </div>
+                <!-- Update Facility Modal -->
+                <div class="modal fade" id="updFac<?= (int)$r['id'] ?>" tabindex="-1" aria-hidden="true">
+                  <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title">Update Facility</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <form method="post" enctype="multipart/form-data">
+                        <div class="modal-body">
+                          <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                          <input type="hidden" name="action" value="update">
+                          <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                          <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input class="form-control" name="name" value="<?= e((string)$r['name']) ?>" required>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Location</label>
+                            <input class="form-control" name="location" value="<?= e((string)$r['location']) ?>" required>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Capacity</label>
+                            <input class="form-control" type="number" min="1" name="capacity" value="<?= (int)$r['capacity'] ?>" required>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Photo (JPG/PNG, optional)</label>
+                            <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button class="btn btn-primary">Save Changes</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>
