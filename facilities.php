@@ -1,13 +1,12 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/db.php';
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isLoggedIn() || ($_SESSION['user']['role'] ?? '') !== 'admin') {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
 }
-
-require_once '../db.php';
 
 $action = '';
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {

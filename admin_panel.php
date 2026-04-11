@@ -1,9 +1,6 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_id'])) {
-    header("Location: login.php");
-    exit();
-}
+require_once __DIR__ . '/includes/auth.php';
+requireRole('admin');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,7 +113,7 @@ if (!isset($_SESSION['admin_id'])) {
 <div class="main-content">
     <div class="header">
         <h1>Dashboard</h1>
-        <span>Welcome, <?php echo htmlspecialchars($_SESSION['admin_name'] ?? 'Admin'); ?></span>
+        <span>Welcome, <?php echo htmlspecialchars($_SESSION['user']['name'] ?? 'Admin'); ?></span>
     </div>
 
     <div class="stats-grid">
