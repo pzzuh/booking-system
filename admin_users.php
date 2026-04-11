@@ -22,6 +22,80 @@ $roles = [
     'security'      => 'Security',
 ];
 
+// NDMU Departments for dropdown
+$ndmuDepartments = [
+    'College of Arts and Sciences' => [
+        'Bachelor of Arts in Communication',
+        'Bachelor of Arts in English Language Studies',
+        'Bachelor of Science in Biology',
+        'Bachelor of Science in Mathematics',
+        'Bachelor of Science in Psychology',
+        'Bachelor of Science in Social Work',
+    ],
+    'College of Business and Accountancy' => [
+        'Bachelor of Science in Accountancy',
+        'Bachelor of Science in Business Administration - Financial Management',
+        'Bachelor of Science in Business Administration - Human Resource Management',
+        'Bachelor of Science in Business Administration - Marketing Management',
+        'Bachelor of Science in Business Administration - Operations Management',
+    ],
+    'College of Computer Studies' => [
+        'Bachelor of Science in Computer Science',
+        'Bachelor of Science in Information Technology',
+        'Bachelor of Science in Information Systems',
+    ],
+    'College of Criminal Justice Education' => [
+        'Bachelor of Science in Criminology',
+    ],
+    'College of Education' => [
+        'Bachelor of Elementary Education',
+        'Bachelor of Secondary Education - English',
+        'Bachelor of Secondary Education - Mathematics',
+        'Bachelor of Secondary Education - Science',
+        'Bachelor of Secondary Education - Social Studies',
+        'Bachelor of Physical Education',
+    ],
+    'College of Engineering' => [
+        'Bachelor of Science in Civil Engineering',
+        'Bachelor of Science in Electrical Engineering',
+        'Bachelor of Science in Electronics Engineering',
+        'Bachelor of Science in Mechanical Engineering',
+    ],
+    'College of Health Sciences' => [
+        'Bachelor of Science in Nursing',
+        'Bachelor of Science in Pharmacy',
+        'Bachelor of Science in Medical Technology',
+        'Bachelor of Science in Physical Therapy',
+        'Bachelor of Science in Radiologic Technology',
+    ],
+    'College of Law' => [
+        'Juris Doctor',
+    ],
+    'Graduate School' => [
+        'Master of Arts in Education',
+        'Master of Business Administration',
+        'Master of Science in Information Technology',
+        'Doctor of Philosophy in Educational Management',
+    ],
+    'Administration / Non-Academic' => [
+        'Office of the President',
+        'Office of the VP for Administration',
+        'Office of the VP for Academics',
+        'Office of the AVP for Admin',
+        'Dean\'s Office',
+        'Director of Student Affairs (DSA)',
+        'Physical Plant and Security Services (PPSS)',
+        'Registrar\'s Office',
+        'Finance Office',
+        'Human Resources Office',
+        'Information Technology Office',
+        'Library',
+        'Guidance and Counseling Center',
+        'Campus Ministry',
+        'Athletics',
+    ],
+];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
     $action = sanitizeInput($_POST['action'] ?? '');
@@ -31,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name  = sanitizeInput($_POST['full_name'] ?? '');
             $email = sanitizeInput($_POST['email'] ?? '');
             $role  = sanitizeInput($_POST['role'] ?? 'student');
+            $dept  = sanitizeInput($_POST['department'] ?? '');
             $pwd   = (string)($_POST['password'] ?? '');
             if ($name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $pwd === '' || strlen($pwd) < 8 || !array_key_exists($role, $roles)) {
                 redirectWithMessage('admin_users.php', 'danger', 'Invalid user details. Password must be at least 8 characters.');
@@ -41,8 +116,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirectWithMessage('admin_users.php', 'danger', 'Email already exists.');
             }
             $hash = password_hash($pwd, PASSWORD_BCRYPT);
-            $stmt = $pdo->prepare('INSERT INTO users (full_name, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, NOW())');
-            $stmt->execute([$name, $email, $hash, $role]);
+            $stmt = $pdo->prepare('INSERT INTO users (full_name, email, password_hash, role, department, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())');
+            $stmt->execute([$name, $email, $hash, $role, $dept !== '' ? $dept : null]);
             redirectWithMessage('admin_users.php', 'success', 'User created successfully.');
         }
 
@@ -74,6 +149,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare('UPDATE users SET full_name = ?, student_id = ? WHERE id = ?');
             $stmt->execute([$full_name, $studentId, $id]);
             redirectWithMessage('admin_users.php', 'success', 'User info updated successfully.');
+        }
+
+        if ($action === 'update_department') {
+            $id   = (int)($_POST['id'] ?? 0);
+            $dept = sanitizeInput($_POST['department'] ?? '');
+            $stmt = $pdo->prepare('UPDATE users SET department = ? WHERE id = ?');
+            $stmt->execute([$dept !== '' ? $dept : null, $id]);
+            redirectWithMessage('admin_users.php', 'success', 'Department updated successfully.');
         }
 
         if ($action === 'reset_password') {
@@ -154,6 +237,18 @@ try {
           <?php endforeach; ?>
         </select>
       </div>
+      <div class="col-md-3">
+        <select class="form-select" name="department">
+          <option value="">-- Department (optional) --</option>
+          <?php foreach ($ndmuDepartments as $college => $depts): ?>
+            <optgroup label="<?= e($college) ?>">
+              <?php foreach ($depts as $dept): ?>
+                <option value="<?= e($dept) ?>"><?= e($dept) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+          <?php endforeach; ?>
+        </select>
+      </div>
       <div class="col-md-2">
         <input class="form-control" type="password" name="password" placeholder="Temp password (8+ chars)" required>
       </div>
@@ -225,7 +320,24 @@ try {
                 </form>
               </td>
               <td class="small"><?= e((string)$u['email']) ?></td>
-              <td class="small text-muted"><?= e((string)($u['department'] ?? '—')) ?></td>
+              <td>
+                <form method="post" class="d-flex gap-1 align-items-center" style="min-width:200px;">
+                  <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                  <input type="hidden" name="action" value="update_department">
+                  <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                  <select class="form-select form-select-sm" name="department" style="min-width:180px;">
+                    <option value="">-- None --</option>
+                    <?php foreach ($ndmuDepartments as $college => $depts): ?>
+                      <optgroup label="<?= e($college) ?>">
+                        <?php foreach ($depts as $dept): ?>
+                          <option value="<?= e($dept) ?>" <?= ((string)($u['department'] ?? '') === $dept) ? 'selected' : '' ?>><?= e($dept) ?></option>
+                        <?php endforeach; ?>
+                      </optgroup>
+                    <?php endforeach; ?>
+                  </select>
+                  <button class="btn btn-sm btn-outline-primary" title="Update department"><i class="fa-solid fa-check"></i></button>
+                </form>
+              </td>
 
               <!-- Role Assignment -->
               <td>

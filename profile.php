@@ -73,13 +73,6 @@ $ndmuDepartments = [
         'Master of Science in Information Technology',
         'Doctor of Philosophy in Educational Management',
     ],
-    'Senior High School' => [
-        'Academic Track - STEM',
-        'Academic Track - ABM',
-        'Academic Track - HUMSS',
-        'Academic Track - GAS',
-        'TVL Track',
-    ],
     'Administration / Non-Academic' => [
         'Office of the President',
         'Office of the VP for Administration',
@@ -110,25 +103,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $name       = sanitizeInput($_POST['full_name']   ?? '');
         $phone      = sanitizeInput($_POST['phone']       ?? '');
-        $department = sanitizeInput($_POST['department']  ?? '');
         $studentId  = sanitizeInput($_POST['student_id']  ?? '');
 
         $isAdmin = ((string)$dbUser['role'] === 'admin');
 
-        // Build flat department list for validation
-        $allDepts = [];
-        foreach ($ndmuDepartments as $college => $depts) {
-            foreach ($depts as $d) {
-                $allDepts[] = $d;
-            }
-        }
-
         if ($name === '' || $phone === '') {
             $error = 'Please complete all required profile fields.';
-        } elseif (!$isAdmin && ($department === '' || $studentId === '')) {
+        } elseif (!$isAdmin && $studentId === '') {
             $error = 'Please complete all profile fields.';
-        } elseif (!$isAdmin && !in_array($department, $allDepts, true)) {
-            $error = 'Please select a valid department.';
         } else {
             $photoPath = (string)($dbUser['profile_photo'] ?? '');
 
@@ -191,8 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, profile_photo=? WHERE id=?');
                     $stmt->execute([$name, $phone, $photoPath, (int)$dbUser['id']]);
                 } else {
-                    $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, department=?, student_id=?, profile_photo=? WHERE id=?');
-                    $stmt->execute([$name, $phone, $department, $studentId, $photoPath, (int)$dbUser['id']]);
+                    $stmt = $pdo->prepare('UPDATE users SET full_name=?, phone=?, student_id=?, profile_photo=? WHERE id=?');
+                    $stmt->execute([$name, $phone, $studentId, $photoPath, (int)$dbUser['id']]);
                 }
                 $_SESSION['user']['name'] = $name;
                 $success = 'Profile updated successfully.';
@@ -306,20 +288,9 @@ $roleLabel = $roleLabels[(string)$dbUser['role']] ?? ucfirst((string)$dbUser['ro
                                 <input class="form-control" name="student_id" required value="<?= e((string)($dbUser['student_id'] ?? '')) ?>">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">College / Department</label>
-                                <select class="form-select" name="department" required>
-                                    <option value="" disabled <?= empty($dbUser['department']) ? 'selected' : '' ?>>— Select —</option>
-                                    <?php foreach ($ndmuDepartments as $college => $depts): ?>
-                                        <optgroup label="<?= e($college) ?>">
-                                            <?php foreach ($depts as $dept): ?>
-                                                <option value="<?= e($dept) ?>"
-                                                    <?= ((string)($dbUser['department'] ?? '') === $dept) ? 'selected' : '' ?>>
-                                                    <?= e($dept) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </optgroup>
-                                    <?php endforeach; ?>
-                                </select>
+                                <label class="form-label">Department</label>
+                                <input class="form-control" type="text" value="<?= e((string)($dbUser['department'] ?? 'Not assigned')) ?>" disabled>
+                                <div class="form-text text-muted">Department is managed by the administrator.</div>
                             </div>
                             <?php endif; ?>
                             <div class="col-12">
