@@ -31,8 +31,10 @@ CREATE TABLE IF NOT EXISTS users (
     department      VARCHAR(255),
     student_id      VARCHAR(50),
     profile_photo   VARCHAR(255),
-    is_active       TINYINT(1) DEFAULT 1,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_active           TINYINT(1) DEFAULT 1,
+    remember_token      VARCHAR(64)  NULL DEFAULT NULL,
+    remember_expires    DATETIME     NULL DEFAULT NULL,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================
@@ -230,6 +232,7 @@ CREATE TABLE IF NOT EXISTS messages (
 -- INDEXES
 -- =============================================================
 CREATE INDEX idx_users_email                        ON users(email);
+CREATE INDEX idx_remember_token                         ON users(remember_token);
 CREATE INDEX idx_users_role                         ON users(role);
 CREATE INDEX idx_facility_bookings_user_id          ON facility_bookings(user_id);
 CREATE INDEX idx_facility_bookings_facility_id      ON facility_bookings(facility_id);

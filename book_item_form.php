@@ -70,54 +70,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $pdo->beginTransaction();
 
-                // Re-check and decrement atomically
-                $stmt = $pdo->prepare('SELECT quantity_available FROM items WHERE id = ? FOR UPDATE');
-                $stmt->execute([$itemId]);
-                $avail = (int)$stmt->fetchColumn();
+                $stmt = $pdo->prepare(
+                    'INSERT INTO item_bookings
+                        (user_id, item_id, quantity_needed, borrow_date, return_date,
+                         borrow_time, return_time, purpose, notes, status, current_approval_role, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
+                );
+                $stmt->execute([
+                    (int)$user['id'],
+                    $itemId,
+                    $qty,
+                    $borrowDate,
+                    $returnDate,
+                    $borrowTime,
+                    $returnTime,
+                    $purpose,
+                    $notes,
+                ]);
 
-                if ($avail < $qty) {
-                    $pdo->rollBack();
-                    $error = 'Not enough quantity available right now.';
-                } else {
-                    $stmt = $pdo->prepare(
-                        'INSERT INTO item_bookings
-                            (user_id, item_id, quantity_needed, borrow_date, return_date,
-                             borrow_time, return_time, purpose, notes, status, current_approval_role, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
+                $bookingId = (int)$pdo->lastInsertId();
+
+                $pdo->commit();
+
+                $stmt = $pdo->query("SELECT id FROM users WHERE role = 'adviser' AND is_active = 1");
+                foreach ($stmt->fetchAll() as $row) {
+                    sendNotification(
+                        $pdo,
+                        (int)$row['id'],
+                        'New Item Borrowing Request',
+                        "{$user['name']} submitted an item borrowing request for {$item['name']}.",
+                        'booking',
+                        $bookingId
                     );
-                    $stmt->execute([
-                        (int)$user['id'],
-                        $itemId,
-                        $qty,
-                        $borrowDate,
-                        $returnDate,
-                        $borrowTime,
-                        $returnTime,
-                        $purpose,
-                        $notes,
-                    ]);
-
-                    $bookingId = (int)$pdo->lastInsertId();
-
-                    $stmt = $pdo->prepare('UPDATE items SET quantity_available = quantity_available - ? WHERE id = ?');
-                    $stmt->execute([$qty, $itemId]);
-
-                    $pdo->commit();
-
-                    $stmt = $pdo->query("SELECT id FROM users WHERE role = 'adviser' AND is_active = 1");
-                    foreach ($stmt->fetchAll() as $row) {
-                        sendNotification(
-                            $pdo,
-                            (int)$row['id'],
-                            'New Item Borrowing Request',
-                            "{$user['name']} submitted an item borrowing request for {$item['name']}.",
-                            'booking',
-                            $bookingId
-                        );
-                    }
-
-                    redirectWithMessage('student_dashboard.php', 'success', 'Item request submitted successfully.');
                 }
+
+                redirectWithMessage('student_dashboard.php', 'success', 'Item request submitted successfully.');
             }
         } catch (Throwable) {
             if ($pdo->inTransaction()) $pdo->rollBack();

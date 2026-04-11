@@ -98,6 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
+            $stmt = $pdo->prepare('DELETE FROM facility_bookings WHERE facility_id = ?');
+            $stmt->execute([$id]);
             $stmt = $pdo->prepare('DELETE FROM facilities WHERE id = ?');
             $stmt->execute([$id]);
             redirectWithMessage('admin_facilities.php', 'success', 'Facility deleted.');
@@ -132,7 +134,7 @@ try {
       <div class="col-md-3"><input class="form-control" name="location" placeholder="Location" required></div>
       <div class="col-md-2"><input class="form-control" type="number" min="1" name="capacity" placeholder="Capacity" required></div>
       <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">Photo (JPG/PNG)</label>
+        <label class="form-label small mb-1 fw-semibold">Photo (JPG/PNG)</label>
         <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
       </div>
       <div class="col-md-1 d-flex align-items-center">

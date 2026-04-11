@@ -41,7 +41,7 @@ try {
 
     if ($type === 'item') {
         // FIX: quantity_needed → quantity_requested (actual DB column name)
-        $stmt = $pdo->prepare('SELECT item_id, quantity_requested, status FROM item_bookings WHERE id = ? AND user_id = ?');
+        $stmt = $pdo->prepare('SELECT item_id, quantity_needed, status FROM item_bookings WHERE id = ? AND user_id = ?');
         $stmt->execute([$id, (int)$user['id']]);
         $b = $stmt->fetch();
 
@@ -60,7 +60,7 @@ try {
 
         // FIX: use quantity_requested (fetched above) to restore stock
         $stmt = $pdo->prepare('UPDATE items SET quantity_available = quantity_available + ? WHERE id = ?');
-        $stmt->execute([(int)$b['quantity_requested'], (int)$b['item_id']]);
+        $stmt->execute([(int)$b['quantity_needed'], (int)$b['item_id']]);
 
         $pdo->commit();
 

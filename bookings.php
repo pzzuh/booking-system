@@ -31,16 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 function listBookings($pdo, $type, $status, $date) {
     try {
         if ($type === 'facility') {
-            // Adjust table/column names to match your actual DB schema
             $sql = "
                 SELECT 
                     fb.id,
-                    u.name AS requester_name,
+                    u.full_name AS requester_name,
                     u.department,
                     f.name AS facility_name,
-                    fb.booking_date,
-                    fb.start_time,
-                    fb.end_time,
+                    fb.date_start,
+                    fb.time_start,
+                    fb.time_end,
                     fb.purpose,
                     fb.status
                 FROM facility_bookings fb
@@ -50,19 +49,18 @@ function listBookings($pdo, $type, $status, $date) {
             ";
             $params = [];
             if ($status) { $sql .= " AND fb.status = ?"; $params[] = $status; }
-            if ($date) { $sql .= " AND fb.booking_date = ?"; $params[] = $date; }
+            if ($date) { $sql .= " AND fb.date_start = ?"; $params[] = $date; }
             $sql .= " ORDER BY fb.id DESC";
 
         } else {
-            // Item bookings - adjust table/column names to match your actual DB schema
             $sql = "
                 SELECT 
                     ib.id,
-                    u.name AS requester_name,
+                    u.full_name AS requester_name,
                     u.department,
                     i.name AS item_name,
-                    ib.quantity,
-                    ib.date_needed,
+                    ib.quantity_needed,
+                    ib.borrow_date,
                     ib.return_date,
                     ib.purpose,
                     ib.status
@@ -73,7 +71,7 @@ function listBookings($pdo, $type, $status, $date) {
             ";
             $params = [];
             if ($status) { $sql .= " AND ib.status = ?"; $params[] = $status; }
-            if ($date) { $sql .= " AND ib.date_needed = ?"; $params[] = $date; }
+            if ($date) { $sql .= " AND ib.borrow_date = ?"; $params[] = $date; }
             $sql .= " ORDER BY ib.id DESC";
         }
 

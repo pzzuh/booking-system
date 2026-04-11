@@ -204,19 +204,10 @@ function progressForFacilityBooking(PDO $pdo, array $booking): array
                                 <td><?= e((string)$b['item_name']) ?></td>
                                 <td><?= e((string)($b['category'] ?? '')) ?></td>
                                 <td>
-                                    <?php
-                                        // FIX: DB stores a single DATETIME in date_start / date_end.
-                                        // Split them for display so the UI still shows date and time separately.
-                                        $ds = $b['date_start'] ?? '';
-                                        $de = $b['date_end']   ?? '';
-                                        [$borrowDateDisp, $borrowTimeDisp] = $ds ? explode(' ', $ds, 2) + ['', ''] : ['—', ''];
-                                        [$returnDateDisp, $returnTimeDisp] = $de ? explode(' ', $de, 2) + ['', ''] : ['—', ''];
-                                    ?>
-                                    <div class="small"><?= e($borrowDateDisp) ?> → <?= e($returnDateDisp) ?></div>
-                                    <div class="text-muted small"><?= e($borrowTimeDisp) ?> → <?= e($returnTimeDisp) ?></div>
+                                    <div class="small"><?= e((string)($b['borrow_date'] ?? '—')) ?> → <?= e((string)($b['return_date'] ?? '—')) ?></div>
+                                    <div class="text-muted small"><?= e((string)($b['borrow_time'] ?? '')) ?> → <?= e((string)($b['return_time'] ?? '')) ?></div>
                                 </td>
-                                <!-- FIX: quantity_needed → quantity_requested -->
-                                <td><?= (int)($b['quantity_requested'] ?? 0) ?></td>
+                                <td><?= (int)($b['quantity_needed'] ?? 0) ?></td>
                                 <td><?= statusBadge((string)$b['status']) ?></td>
                                 <td><?= approvalRoleBadge((string)($b['current_approval_role'] ?? '')) ?></td>
                                 <td class="text-end">

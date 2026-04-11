@@ -107,6 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
+            $stmt = $pdo->prepare('DELETE FROM item_bookings WHERE item_id = ?');
+            $stmt->execute([$id]);
             $stmt = $pdo->prepare('DELETE FROM items WHERE id = ?');
             $stmt->execute([$id]);
             redirectWithMessage('admin_items.php', 'success', 'Item deleted.');
@@ -141,7 +143,7 @@ try {
       <div class="col-md-3"><input class="form-control" name="category" placeholder="Category" required></div>
       <div class="col-md-2"><input class="form-control" type="number" min="0" name="quantity_available" placeholder="Qty" required></div>
       <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">Photo (JPG/PNG)</label>
+        <label class="form-label small mb-1 fw-semibold">Photo (JPG/PNG)</label>
         <input class="form-control" type="file" name="photo" accept="image/jpeg,image/png">
       </div>
       <div class="col-md-1 d-flex align-items-center">
