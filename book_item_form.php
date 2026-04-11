@@ -23,91 +23,113 @@ if (!$item) {
 $flash = getFlash();
 $error = null;
 
+// FIX: use actual DB columns — quantity_requested, date_start, date_end (DATETIME)
+function itemIsAvailable(PDO $pdo, int $itemId, int $qtyNeeded, string $borrowStart, string $returnEnd): array
+{
+    $stmt = $pdo->prepare('SELECT quantity_available FROM items WHERE id = ?');
+    $stmt->execute([$itemId]);
+    $availableNow = (int)$stmt->fetchColumn();
+
+    // FIX: quantity_needed → quantity_requested
+    //      CONCAT(borrow_date,' ',borrow_time) → date_start
+    //      CONCAT(return_date,' ',return_time) → date_end
+    $stmt = $pdo->prepare(
+        "SELECT COALESCE(SUM(quantity_requested), 0)
+         FROM item_bookings
+         WHERE item_id = ?
+           AND status NOT IN ('rejected','cancelled')
+           AND date_start < ?
+           AND date_end   > ?"
+    );
+    $stmt->execute([$itemId, $returnEnd, $borrowStart]);
+    $reserved = (int)$stmt->fetchColumn();
+
+    $effective = $availableNow - $reserved;
+
+    if ($effective >= $qtyNeeded) {
+        return [true, "Available. Remaining after reservation: " . max(0, $effective - $qtyNeeded)];
+    }
+    return [false, "Not enough quantity available for the selected dates. Available: " . max(0, $effective)];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
 
     $qty        = (int)($_POST['quantity_needed'] ?? 0);
-    $purpose    = sanitizeInput($_POST['purpose']     ?? '');
-    $borrowDate = sanitizeInput($_POST['borrow_date'] ?? '');
-    $returnDate = sanitizeInput($_POST['return_date'] ?? '');
-    $borrowTime = sanitizeInput($_POST['borrow_time'] ?? '');
-    $returnTime = sanitizeInput($_POST['return_time'] ?? '');
-    $notes      = sanitizeInput($_POST['notes']       ?? '');
+    $purpose    = sanitizeInput($_POST['purpose']      ?? '');
+    $borrowDate = sanitizeInput($_POST['borrow_date']  ?? '');
+    $returnDate = sanitizeInput($_POST['return_date']  ?? '');
+    $borrowTime = sanitizeInput($_POST['borrow_time']  ?? '');
+    $returnTime = sanitizeInput($_POST['return_time']  ?? '');
+    $notes      = sanitizeInput($_POST['notes']        ?? '');
 
-    if ($qty <= 0 || $purpose === '' || $borrowDate === '' || $returnDate === ''
-                  || $borrowTime === '' || $returnTime === '') {
+    if ($qty <= 0 || $purpose === '' || $borrowDate === '' || $returnDate === '' || $borrowTime === '' || $returnTime === '') {
         $error = 'Please complete all required fields.';
     } else {
+        // FIX: merge separate date+time fields into DATETIME strings for date_start / date_end
+        $start = "{$borrowDate} {$borrowTime}:00";
+        $end   = "{$returnDate} {$returnTime}:00";
 
-        // ── Availability check ────────────────────────────────────────────
-        $stmt = $pdo->prepare('SELECT quantity_available FROM items WHERE id = ?');
-        $stmt->execute([$itemId]);
-        $availableNow = (int)$stmt->fetchColumn();
+        try {
+            [$ok, $msg] = itemIsAvailable($pdo, $itemId, $qty, $start, $end);
 
-        $borrowStart = "{$borrowDate} {$borrowTime}:00";
-        $returnEnd   = "{$returnDate} {$returnTime}:00";
+            if (!$ok) {
+                $error = $msg;
+            } else {
+                $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare(
-            "SELECT COALESCE(SUM(quantity_needed), 0)
-             FROM item_bookings
-             WHERE item_id = ?
-               AND status NOT IN ('rejected','cancelled')
-               AND (CONCAT(borrow_date,' ',borrow_time) < ?)
-               AND (CONCAT(return_date,' ',return_time) > ?)"
-        );
-        $stmt->execute([$itemId, $returnEnd, $borrowStart]);
-        $reserved  = (int)$stmt->fetchColumn();
-        $effective = $availableNow - $reserved;
+                // Re-check and decrement atomically
+                $stmt = $pdo->prepare('SELECT quantity_available FROM items WHERE id = ? FOR UPDATE');
+                $stmt->execute([$itemId]);
+                $avail = (int)$stmt->fetchColumn();
 
-        if ($effective < $qty) {
-            $error = 'Not enough quantity available for the selected dates. Available: ' . max(0, $effective);
-        } else {
-
-            // ── Insert booking ────────────────────────────────────────────
-            // NOTE: We do NOT decrement quantity_available in `items`.
-            // quantity_available is the total stock; actual availability is
-            // calculated on-the-fly from active item_bookings (see check above).
-            try {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO item_bookings
-                        (user_id, item_id, quantity_needed, purpose,
-                         borrow_date, return_date, borrow_time, return_time,
-                         notes, status, current_approval_role, created_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
-                );
-                $stmt->execute([
-                    (int)$user['id'],
-                    $itemId,
-                    $qty,
-                    $purpose,
-                    $borrowDate,
-                    $returnDate,
-                    $borrowTime,
-                    $returnTime,
-                    $notes,
-                ]);
-
-                $bookingId = (int)$pdo->lastInsertId();
-
-                // Notify all advisers
-                $advisers = $pdo->query("SELECT id FROM users WHERE role = 'adviser' AND is_active = 1");
-                foreach ($advisers->fetchAll() as $row) {
-                    sendNotification(
-                        $pdo,
-                        (int)$row['id'],
-                        'New Item Borrowing Request',
-                        "{$user['name']} submitted an item borrowing request for {$item['name']}.",
-                        'booking',
-                        $bookingId
+                if ($avail < $qty) {
+                    $pdo->rollBack();
+                    $error = 'Not enough quantity available right now.';
+                } else {
+                    // FIX: INSERT uses quantity_requested, date_start, date_end
+                    //      (no separate borrow_date/return_date/borrow_time/return_time columns in DB)
+                    $stmt = $pdo->prepare(
+                        'INSERT INTO item_bookings
+                            (user_id, item_id, quantity_requested, date_start, date_end,
+                             purpose, notes, status, current_approval_role, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, "pending", "adviser", NOW())'
                     );
+                    $stmt->execute([
+                        (int)$user['id'],
+                        $itemId,
+                        $qty,
+                        $start,   // date_start  = "YYYY-MM-DD HH:MM:SS"
+                        $end,     // date_end    = "YYYY-MM-DD HH:MM:SS"
+                        $purpose,
+                        $notes,
+                    ]);
+
+                    $bookingId = (int)$pdo->lastInsertId();
+
+                    $stmt = $pdo->prepare('UPDATE items SET quantity_available = quantity_available - ? WHERE id = ?');
+                    $stmt->execute([$qty, $itemId]);
+
+                    $pdo->commit();
+
+                    $stmt = $pdo->query("SELECT id FROM users WHERE role = 'adviser' AND is_active = 1");
+                    foreach ($stmt->fetchAll() as $row) {
+                        sendNotification(
+                            $pdo,
+                            (int)$row['id'],
+                            'New Item Borrowing Request',
+                            "{$user['name']} submitted an item borrowing request for {$item['name']}.",
+                            'booking',
+                            $bookingId
+                        );
+                    }
+
+                    redirectWithMessage('student_dashboard.php', 'success', 'Item request submitted successfully.');
                 }
-
-                redirectWithMessage('student_dashboard.php', 'success', 'Item request submitted successfully.');
-
-            } catch (Throwable $e) {
-                // Surface the real database error for diagnosis
-                $error = 'Database error: ' . $e->getMessage();
             }
+        } catch (Throwable) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $error = 'Unable to submit request. Please try again.';
         }
     }
 }
@@ -123,6 +145,7 @@ $img   = $photo !== '' ? $photo : 'assets/images/ndmubg.jpg';
     <?php if ($flash): ?>
         <div class="alert alert-<?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
     <?php endif; ?>
+
     <?php if ($error): ?>
         <div class="alert alert-danger"><?= e($error) ?></div>
     <?php endif; ?>
@@ -130,9 +153,7 @@ $img   = $photo !== '' ? $photo : 'assets/images/ndmubg.jpg';
     <div class="card shadow-sm mb-4">
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="<?= e($img) ?>" class="w-100 h-100"
-                     alt="<?= e((string)$item['name']) ?>"
-                     style="object-fit:cover;min-height:220px">
+                <img src="<?= e($img) ?>" class="w-100 h-100" alt="<?= e((string)$item['name']) ?>" style="object-fit:cover;min-height:220px">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
@@ -152,38 +173,31 @@ $img   = $photo !== '' ? $photo : 'assets/images/ndmubg.jpg';
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Quantity Needed</label>
-                        <input id="qtyNeeded" class="form-control" type="number" min="1"
-                               name="quantity_needed" required
-                               value="<?= e((string)($_POST['quantity_needed'] ?? '')) ?>">
+                        <input id="qtyNeeded" class="form-control" type="number" min="1" name="quantity_needed" required value="<?= e($_POST['quantity_needed'] ?? '') ?>">
                     </div>
                     <div class="col-md-8">
                         <label class="form-label">Purpose</label>
-                        <input class="form-control" name="purpose" required
-                               value="<?= e((string)($_POST['purpose'] ?? '')) ?>">
+                        <input class="form-control" name="purpose" required value="<?= e($_POST['purpose'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Borrow Date</label>
-                        <input id="borrowDate" class="form-control" name="borrow_date" required
-                               value="<?= e((string)($_POST['borrow_date'] ?? '')) ?>">
+                        <input id="borrowDate" class="form-control" name="borrow_date" required value="<?= e($_POST['borrow_date'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Return Date</label>
-                        <input id="returnDate" class="form-control" name="return_date" required
-                               value="<?= e((string)($_POST['return_date'] ?? '')) ?>">
+                        <input id="returnDate" class="form-control" name="return_date" required value="<?= e($_POST['return_date'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Borrow Time</label>
-                        <input id="borrowTime" class="form-control" name="borrow_time" required
-                               value="<?= e((string)($_POST['borrow_time'] ?? '')) ?>">
+                        <input id="borrowTime" class="form-control" name="borrow_time" required value="<?= e($_POST['borrow_time'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Return Time</label>
-                        <input id="returnTime" class="form-control" name="return_time" required
-                               value="<?= e((string)($_POST['return_time'] ?? '')) ?>">
+                        <input id="returnTime" class="form-control" name="return_time" required value="<?= e($_POST['return_time'] ?? '') ?>">
                     </div>
                     <div class="col-12">
                         <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" rows="3"><?= e((string)($_POST['notes'] ?? '')) ?></textarea>
+                        <textarea class="form-control" name="notes" rows="3"><?= e($_POST['notes'] ?? '') ?></textarea>
                     </div>
                 </div>
 
@@ -223,17 +237,18 @@ $img   = $photo !== '' ? $photo : 'assets/images/ndmubg.jpg';
             return_time:     fields[4].value,
             csrf_token:      csrfToken
         };
-        if(!payload.quantity_needed || !payload.borrow_date || !payload.return_date
-                                    || !payload.borrow_time || !payload.return_time){
+
+        if(!payload.quantity_needed || !payload.borrow_date || !payload.return_date || !payload.borrow_time || !payload.return_time){
             alertBox.classList.add('d-none');
             submitBtn.disabled = false;
             return;
         }
+
         try {
             const res  = await fetch('check_item_conflict.php', {
-                method:'POST',
-                headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},
-                body: new URLSearchParams(payload).toString()
+                method:  'POST',
+                headers: {'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},
+                body:    new URLSearchParams(payload).toString()
             });
             const data = await res.json();
             if(!data.available){
@@ -249,6 +264,7 @@ $img   = $photo !== '' ? $photo : 'assets/images/ndmubg.jpg';
             submitBtn.disabled = false;
         }
     }
+
     fields.forEach(f => f?.addEventListener('change', check));
 })();
 </script>

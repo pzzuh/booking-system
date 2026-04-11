@@ -133,11 +133,11 @@ try {
         </div>
         <div class="col-md-6">
           <label class="form-label">Date Start</label>
-          <input class="form-control" type="date" name="date_start" required>
+          <input class="form-control date-picker-input" type="date" name="date_start" required onclick="try{this.showPicker()}catch(e){}">
         </div>
         <div class="col-md-6">
           <label class="form-label">Date End</label>
-          <input class="form-control" type="date" name="date_end" required>
+          <input class="form-control date-picker-input" type="date" name="date_end" required onclick="try{this.showPicker()}catch(e){}">
         </div>
         <div class="col-12">
           <button class="btn btn-warning fw-semibold">Create Alert</button>

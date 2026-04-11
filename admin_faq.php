@@ -34,6 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$id]);
             redirectWithMessage('admin_faq.php', 'success', 'FAQ updated.');
         }
+        if ($action === 'update') {
+            $id = (int)($_POST['id'] ?? 0);
+            $category = sanitizeInput($_POST['category'] ?? '');
+            $question = sanitizeInput($_POST['question'] ?? '');
+            $answer   = sanitizeInput($_POST['answer'] ?? '');
+            $sort     = (int)($_POST['sort_order'] ?? 0);
+            if ($question === '' || $answer === '') redirectWithMessage('admin_faq.php', 'danger', 'Question and answer are required.');
+            $stmt = $pdo->prepare('UPDATE faq_entries SET category=?, question=?, answer=?, sort_order=? WHERE id=?');
+            $stmt->execute([$category, $question, $answer, $sort, $id]);
+            redirectWithMessage('admin_faq.php', 'success', 'FAQ entry updated.');
+        }
     } catch (Throwable) {
         redirectWithMessage('admin_faq.php', 'danger', 'Action failed.');
     }
@@ -99,6 +110,9 @@ try {
               <td><?= (int)$r['is_active'] === 1 ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>' ?></td>
               <td class="text-end">
                 <div class="d-flex justify-content-end gap-2 flex-wrap">
+                  <button class="btn btn-sm btn-outline-info"
+                    data-bs-toggle="modal"
+                    data-bs-target="#editFaq<?= (int)$r['id'] ?>">Edit</button>
                   <form method="post" class="d-inline">
                     <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
                     <input type="hidden" name="action" value="toggle">
@@ -111,6 +125,46 @@ try {
                     <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
                     <button class="btn btn-sm btn-outline-danger">Delete</button>
                   </form>
+                </div>
+                <!-- Edit Modal -->
+                <div class="modal fade" id="editFaq<?= (int)$r['id'] ?>" tabindex="-1" aria-hidden="true">
+                  <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title">Edit FAQ Entry</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <form method="post">
+                        <div class="modal-body">
+                          <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+                          <input type="hidden" name="action" value="update">
+                          <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                          <div class="row g-3">
+                            <div class="col-md-6">
+                              <label class="form-label">Category</label>
+                              <input class="form-control" name="category" value="<?= e((string)$r['category']) ?>">
+                            </div>
+                            <div class="col-md-6">
+                              <label class="form-label">Sort Order</label>
+                              <input class="form-control" type="number" name="sort_order" value="<?= (int)$r['sort_order'] ?>">
+                            </div>
+                            <div class="col-12">
+                              <label class="form-label">Question</label>
+                              <input class="form-control" name="question" value="<?= e((string)$r['question']) ?>" required>
+                            </div>
+                            <div class="col-12">
+                              <label class="form-label">Answer</label>
+                              <textarea class="form-control" name="answer" rows="4" required><?= e((string)$r['answer']) ?></textarea>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button class="btn btn-warning fw-semibold">Update</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>

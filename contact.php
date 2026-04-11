@@ -23,6 +23,30 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireValidCsrfOrDie();
 
+    $action = sanitizeInput($_POST['action'] ?? 'send_message');
+
+    // Admin updating contact settings
+    if ($action === 'update_settings' && isset($user['role']) && (string)$user['role'] === 'admin') {
+        $newAddress = sanitizeInput($_POST['address'] ?? '');
+        $newEmail   = sanitizeInput($_POST['email_setting'] ?? '');
+        $newPhone   = sanitizeInput($_POST['phone_setting'] ?? '');
+        $newSchool  = sanitizeInput($_POST['school_name'] ?? '');
+        try {
+            foreach ([
+                'address'     => $newAddress,
+                'email'       => $newEmail,
+                'phone'       => $newPhone,
+                'school_name' => $newSchool,
+            ] as $key => $val) {
+                $stmt = $pdo->prepare("INSERT INTO system_settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?");
+                $stmt->execute([$key, $val, $val]);
+            }
+            redirectWithMessage('contact.php', 'success', 'Contact information updated.');
+        } catch (Throwable) {
+            redirectWithMessage('contact.php', 'danger', 'Failed to update settings.');
+        }
+    }
+
     $name = sanitizeInput($_POST['name'] ?? '');
     $email = sanitizeInput($_POST['email'] ?? '');
     $subject = sanitizeInput($_POST['subject'] ?? '');
@@ -67,14 +91,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="row g-4">
     <div class="col-lg-5">
-      <div class="card shadow-sm">
+      <div class="card shadow-sm mb-3">
         <div class="card-body">
           <h2 class="h5 fw-semibold mb-3">Contact Information</h2>
+          <div class="mb-2"><i class="fa-solid fa-building me-2 text-muted"></i><strong><?= e($settings['school_name']) ?></strong></div>
           <div class="mb-2"><i class="fa-solid fa-location-dot me-2 text-muted"></i><?= e($settings['address']) ?></div>
           <div class="mb-2"><i class="fa-solid fa-phone me-2 text-muted"></i><?= e($settings['phone']) ?></div>
           <div class="mb-2"><i class="fa-solid fa-envelope me-2 text-muted"></i><?= e($settings['email']) ?></div>
         </div>
       </div>
+      <?php if (isset($user['role']) && (string)$user['role'] === 'admin'): ?>
+      <div class="card shadow-sm border-warning">
+        <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">
+          <i class="fa-solid fa-pen me-1"></i> Update Contact Info
+        </div>
+        <div class="card-body">
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="<?= e(generateCsrfToken()) ?>">
+            <input type="hidden" name="action" value="update_settings">
+            <div class="mb-2">
+              <label class="form-label small">School Name</label>
+              <input class="form-control form-control-sm" name="school_name" value="<?= e($settings['school_name']) ?>" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">Address</label>
+              <input class="form-control form-control-sm" name="address" value="<?= e($settings['address']) ?>" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">Phone</label>
+              <input class="form-control form-control-sm" name="phone_setting" value="<?= e($settings['phone']) ?>" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">Email</label>
+              <input class="form-control form-control-sm" type="email" name="email_setting" value="<?= e($settings['email']) ?>" required>
+            </div>
+            <button class="btn btn-warning btn-sm fw-semibold mt-1 w-100">Update Contact Info</button>
+          </form>
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
     <div class="col-lg-7">
       <div class="card shadow-sm">
