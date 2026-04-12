@@ -61,6 +61,7 @@ try {
 
   <div class="d-flex justify-content-end gap-2 mb-3 no-print">
     <button class="btn btn-success" onclick="window.print()"><i class="fa-solid fa-print me-1"></i>Print</button>
+    <button class="btn btn-danger" onclick="downloadPDF()"><i class="fa-solid fa-file-pdf me-1"></i>Download PDF</button>
     <button class="btn btn-outline-secondary" onclick="window.close()">Close</button>
   </div>
 
@@ -135,6 +136,21 @@ try {
     </div>
   </div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+function downloadPDF() {
+    const element = document.querySelector('.bg-white.border.rounded-3');
+    const opt = {
+        margin:       0.5,
+        filename:     '<?= e($ref) ?>.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
